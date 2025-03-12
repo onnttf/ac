@@ -1,0 +1,30 @@
+### Project ###
+/log/
+/tmp/
+/dist/
+/config/*.json
+!/config/example.json
+
+### Editor ###
+.vscode/
+.idea/
+*.swp
+*.swo
+*.un~
+
+### OS ###
+.DS_Store
+
+### Go ###
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Workspace
+go.work*
+go.work.sum*
