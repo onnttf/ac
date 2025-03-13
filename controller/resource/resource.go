@@ -4,8 +4,9 @@ import (
 	"ac/bootstrap/database"
 	"ac/bootstrap/logger"
 	"ac/controller"
-	"ac/service/Resource"
+	resource "ac/service/Resource"
 	"ac/service/system"
+
 	"gorm.io/gorm"
 
 	"ac/custom/input"
@@ -19,15 +20,15 @@ import (
 )
 
 type Resource struct {
-	ID          int64     `json:"ID"`
-	SystemCode  string    `json:"systemCode"`
+	ID          int64     `json:"id"`
+	SystemCode  string    `json:"system_code"`
 	Code        string    `json:"code"`
 	Name        string    `json:"name"`
-	ParentCode  string    `json:"parentCode"`
+	ParentCode  string    `json:"parent_code"`
 	Description string    `json:"description"`
-	ModifiedBy  string    `json:"modifiedBy"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ModifiedBy  string    `json:"modified_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func RegisterRoutes(g *echo.Group) {

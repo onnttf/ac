@@ -19,7 +19,7 @@ import (
 )
 
 type Role struct {
-	ID          int64     `json:"ID"`
+	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	SystemCode  string    `json:"system_code"`
