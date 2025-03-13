@@ -10,6 +10,7 @@ import (
 	"ac/dal"
 	"ac/model"
 	"ac/service/system"
+	"gorm.io/gorm"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -27,6 +28,38 @@ type System struct {
 func RegisterRoutes(g *echo.Group) {
 	g.GET("/query", queryFunc)
 	g.POST("/add", addFunc)
+	g.POST("/update", updateFunc)
+}
+
+func updateFunc(ctx echo.Context) error {
+	body := struct {
+		Code        string `json:"code" validate:"required,gt=0"`
+		Name        string `json:"name" validate:"required,gt=0"`
+		Description string `json:"description"`
+	}{}
+	if err := input.BindAndValidate(ctx, &body); err != nil {
+		return output.Failure(ctx, controller.ErrInvalidInput.WithMsg(err.Error()))
+	}
+
+	if ok, err := system.Validate(ctx.Request().Context(), body.Code); !ok {
+		if err != nil {
+			logger.Errorf(ctx.Request().Context(), "failed to validate system, err: %s, code: %s", err.Error(), body.Code)
+		}
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+	}
+
+	if err := dal.NewRepo[model.System]().Update(ctx.Request().Context(), database.DB, &model.System{
+		Name:        body.Name,
+		Description: &body.Description,
+		ModifiedBy:  "",
+		UpdatedAt:   util.UTCNow(),
+	}, func(db *gorm.DB) *gorm.DB {
+		return db.Where(model.System{Code: body.Code}).Limit(1)
+	}); err != nil {
+		return output.Failure(ctx, controller.ErrSystemError)
+	}
+
+	return output.Success(ctx, nil)
 }
 
 func addFunc(ctx echo.Context) error {
@@ -50,7 +83,7 @@ func addFunc(ctx echo.Context) error {
 	newValue := &model.System{
 		Code:        code,
 		Name:        body.Name,
-		Description: body.Description,
+		Description: &body.Description,
 		ModifiedBy:  "",
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -63,7 +96,7 @@ func addFunc(ctx echo.Context) error {
 		ID:          newValue.ID,
 		Name:        newValue.Name,
 		Code:        newValue.Code,
-		Description: newValue.Description,
+		Description: *newValue.Description,
 		ModifiedBy:  newValue.ModifiedBy,
 		UpdatedAt:   newValue.UpdatedAt,
 	})
@@ -94,7 +127,7 @@ func queryFunc(ctx echo.Context) error {
 			ID:          v.ID,
 			Name:        v.Name,
 			Code:        v.Code,
-			Description: v.Description,
+			Description: *v.Description,
 			ModifiedBy:  v.ModifiedBy,
 			UpdatedAt:   v.UpdatedAt,
 		})

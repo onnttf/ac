@@ -31,6 +31,7 @@ type Role struct {
 func RegisterRoutes(g *echo.Group) {
 	g.GET("/query", queryFunc)
 	g.POST("/add", addFunc)
+	g.POST("/update", updateFunc)
 	g.POST("/delete", deleteFunc)
 }
 
@@ -50,10 +51,56 @@ func deleteFunc(ctx echo.Context) error {
 		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
 	}
 
+	if ok, err := role.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+		if err != nil {
+			logger.Errorf(ctx.Request().Context(), "failed to validate role, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+		}
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+	}
+
 	err := dal.NewRepo[model.Resource]().Delete(ctx.Request().Context(), database.DB, func(db *gorm.DB) *gorm.DB {
 		return db.Where(model.Resource{SystemCode: body.SystemCode, Code: body.Code})
 	})
 	if err != nil {
+		return output.Failure(ctx, controller.ErrSystemError)
+	}
+
+	return output.Success(ctx, nil)
+}
+
+func updateFunc(ctx echo.Context) error {
+	body := struct {
+		SystemCode  string `json:"system_code" validate:"required,gt=0"`
+		Code        string `json:"code" validate:"required,gt=0"`
+		Name        string `json:"name" validate:"required,gt=0"`
+		Description string `json:"description"`
+	}{}
+	if err := input.BindAndValidate(ctx, &body); err != nil {
+		return output.Failure(ctx, controller.ErrInvalidInput.WithMsg(err.Error()))
+	}
+
+	if ok, err := system.Validate(ctx.Request().Context(), body.SystemCode); !ok {
+		if err != nil {
+			logger.Errorf(ctx.Request().Context(), "failed to validate system, err: %s, code: %s", err.Error(), body.SystemCode)
+		}
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+	}
+
+	if ok, err := role.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+		if err != nil {
+			logger.Errorf(ctx.Request().Context(), "failed to validate role, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+		}
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+	}
+
+	if err := dal.NewRepo[model.Role]().Update(ctx.Request().Context(), database.DB, &model.Role{
+		Name:        body.Name,
+		Description: &body.Description,
+		ModifiedBy:  "",
+		UpdatedAt:   util.UTCNow(),
+	}, func(db *gorm.DB) *gorm.DB {
+		return db.Where(model.Role{SystemCode: body.SystemCode, Code: body.Code}).Limit(1)
+	}); err != nil {
 		return output.Failure(ctx, controller.ErrSystemError)
 	}
 
@@ -90,7 +137,7 @@ func addFunc(ctx echo.Context) error {
 		SystemCode:  body.SystemCode,
 		Name:        body.Name,
 		Code:        code,
-		Description: body.Description,
+		Description: &body.Description,
 		ModifiedBy:  "",
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -103,7 +150,7 @@ func addFunc(ctx echo.Context) error {
 	return output.Success(ctx, Role{
 		ID:          newValue.ID,
 		Name:        newValue.Name,
-		Description: newValue.Description,
+		Description: *newValue.Description,
 		SystemCode:  newValue.SystemCode,
 		Code:        newValue.Code,
 		ModifiedBy:  newValue.ModifiedBy,
@@ -135,7 +182,7 @@ func queryFunc(ctx echo.Context) error {
 		list = append(list, Role{
 			ID:          v.ID,
 			Name:        v.Name,
-			Description: v.Description,
+			Description: *v.Description,
 			SystemCode:  v.SystemCode,
 			Code:        v.Code,
 			ModifiedBy:  v.ModifiedBy,

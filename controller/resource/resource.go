@@ -27,13 +27,13 @@ type Resource struct {
 	ParentCode  string    `json:"parent_code"`
 	Description string    `json:"description"`
 	ModifiedBy  string    `json:"modified_by"`
-	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func RegisterRoutes(g *echo.Group) {
 	g.GET("/query", queryFunc)
 	g.POST("/add", addFunc)
+	g.POST("/update", updateFunc)
 	g.POST("/delete", deleteFunc)
 }
 
@@ -53,10 +53,67 @@ func deleteFunc(ctx echo.Context) error {
 		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
 	}
 
+	if ok, err := resource.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+		if err != nil {
+			logger.Errorf(ctx.Request().Context(), "failed to validate resource, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+		}
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+	}
+
 	err := dal.NewRepo[model.Resource]().Delete(ctx.Request().Context(), database.DB, func(db *gorm.DB) *gorm.DB {
 		return db.Where(model.Resource{SystemCode: body.SystemCode, Code: body.Code})
 	})
 	if err != nil {
+		return output.Failure(ctx, controller.ErrSystemError)
+	}
+
+	return output.Success(ctx, nil)
+}
+
+func updateFunc(ctx echo.Context) error {
+	body := struct {
+		SystemCode  string `json:"system_code" validate:"required,gt=0"`
+		Code        string `json:"code" validate:"required,gt=0"`
+		Name        string `json:"name" validate:"required,gt=0"`
+		Description string `json:"description"`
+		ParentCode  string `json:"parent_code"`
+	}{}
+	if err := input.BindAndValidate(ctx, &body); err != nil {
+		return output.Failure(ctx, controller.ErrInvalidInput.WithMsg(err.Error()))
+	}
+
+	if ok, err := system.Validate(ctx.Request().Context(), body.SystemCode); !ok {
+		if err != nil {
+			logger.Errorf(ctx.Request().Context(), "failed to validate system, err: %s, code: %s", err.Error(), body.SystemCode)
+		}
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+	}
+
+	if ok, err := resource.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+		if err != nil {
+			logger.Errorf(ctx.Request().Context(), "failed to validate resource, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+		}
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+	}
+
+	if body.ParentCode != "" {
+		if ok, err := resource.Validate(ctx.Request().Context(), body.SystemCode, body.ParentCode); !ok {
+			if err != nil {
+				logger.Errorf(ctx.Request().Context(), "failed to validate resource, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.ParentCode)
+			}
+			return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid resource code"))
+		}
+	}
+
+	if err := dal.NewRepo[model.Resource]().Update(ctx.Request().Context(), database.DB, &model.Resource{
+		Name:        body.Name,
+		Description: &body.Description,
+		ParentCode:  &body.ParentCode,
+		ModifiedBy:  "",
+		UpdatedAt:   util.UTCNow(),
+	}, func(db *gorm.DB) *gorm.DB {
+		return db.Where(model.Resource{SystemCode: body.SystemCode, Code: body.Code}).Limit(1)
+	}); err != nil {
 		return output.Failure(ctx, controller.ErrSystemError)
 	}
 
@@ -84,7 +141,7 @@ func addFunc(ctx echo.Context) error {
 	if body.ParentCode != "" {
 		if ok, err := resource.Validate(ctx.Request().Context(), body.SystemCode, body.ParentCode); !ok {
 			if err != nil {
-				logger.Errorf(ctx.Request().Context(), "failed to validate resource, err: %v, system code: %s, code: %s", err, body.SystemCode, body.ParentCode)
+				logger.Errorf(ctx.Request().Context(), "failed to validate resource, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.ParentCode)
 			}
 			return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid resource code"))
 		}
@@ -103,8 +160,8 @@ func addFunc(ctx echo.Context) error {
 		SystemCode:  body.SystemCode,
 		Code:        code,
 		Name:        body.Name,
-		ParentCode:  body.ParentCode,
-		Description: body.Description,
+		ParentCode:  &body.ParentCode,
+		Description: &body.Description,
 		ModifiedBy:  "",
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -119,10 +176,9 @@ func addFunc(ctx echo.Context) error {
 		SystemCode:  newValue.SystemCode,
 		Code:        newValue.Code,
 		Name:        newValue.Name,
-		ParentCode:  "",
-		Description: newValue.Description,
+		ParentCode:  *newValue.ParentCode,
+		Description: *newValue.Description,
 		ModifiedBy:  newValue.ModifiedBy,
-		CreatedAt:   time.Time{},
 		UpdatedAt:   newValue.UpdatedAt,
 	})
 }
@@ -150,10 +206,11 @@ func queryFunc(ctx echo.Context) error {
 	for _, v := range recordList {
 		list = append(list, Resource{
 			ID:          v.ID,
-			Name:        v.Name,
-			Description: v.Description,
 			SystemCode:  v.SystemCode,
 			Code:        v.Code,
+			Name:        v.Name,
+			ParentCode:  *v.ParentCode,
+			Description: *v.Description,
 			ModifiedBy:  v.ModifiedBy,
 			UpdatedAt:   v.UpdatedAt,
 		})
