@@ -23,22 +23,15 @@ type User struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	SystemCode  string    `json:"system_code"`
-	Code        string    `json:"code"`
+	Code        string    `json:"user_code"`
 	ModifiedBy  string    `json:"modified_by"`
 	UpdatedAt   time.Time `json:"update_at"`
-}
-
-func RegisterRoutes(g *echo.Group) {
-	g.GET("/query", queryFunc)
-	g.POST("/add", addFunc)
-	g.POST("/update", updateFunc)
-	g.POST("/delete", deleteFunc)
 }
 
 func deleteFunc(ctx echo.Context) error {
 	body := struct {
 		SystemCode string `json:"system_code" validate:"required,gt=0"`
-		Code       string `json:"code" validate:"required,gt=0"`
+		UserCode   string `json:"user_code" validate:"required,gt=0"`
 	}{}
 	if err := input.BindAndValidate(ctx, &body); err != nil {
 		return output.Failure(ctx, controller.ErrInvalidInput.WithMsg(err.Error()))
@@ -50,16 +43,15 @@ func deleteFunc(ctx echo.Context) error {
 		}
 		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
 	}
-
-	if ok, err := user.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+	if ok, err := user.Validate(ctx.Request().Context(), body.SystemCode, body.UserCode); !ok {
 		if err != nil {
-			logger.Errorf(ctx.Request().Context(), "failed to validate user, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+			logger.Errorf(ctx.Request().Context(), "failed to validate user, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.UserCode)
 		}
-		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid user code"))
 	}
-	
+
 	err := dal.NewRepo[model.User]().Delete(ctx.Request().Context(), database.DB, func(db *gorm.DB) *gorm.DB {
-		return db.Where(model.User{SystemCode: body.SystemCode, Code: body.Code})
+		return db.Where(model.User{SystemCode: body.SystemCode, Code: body.UserCode})
 	})
 	if err != nil {
 		return output.Failure(ctx, controller.ErrSystemError)
@@ -71,7 +63,7 @@ func deleteFunc(ctx echo.Context) error {
 func updateFunc(ctx echo.Context) error {
 	body := struct {
 		SystemCode  string `json:"system_code" validate:"required,gt=0"`
-		Code        string `json:"code" validate:"required,gt=0"`
+		UserCode    string `json:"user_code" validate:"required,gt=0"`
 		Name        string `json:"name" validate:"required,gt=0"`
 		Description string `json:"description"`
 	}{}
@@ -85,12 +77,11 @@ func updateFunc(ctx echo.Context) error {
 		}
 		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
 	}
-
-	if ok, err := user.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+	if ok, err := user.Validate(ctx.Request().Context(), body.SystemCode, body.UserCode); !ok {
 		if err != nil {
-			logger.Errorf(ctx.Request().Context(), "failed to validate user, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+			logger.Errorf(ctx.Request().Context(), "failed to validate user, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.UserCode)
 		}
-		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid user code"))
 	}
 
 	if err := dal.NewRepo[model.User]().Update(ctx.Request().Context(), database.DB, &model.User{
@@ -99,7 +90,7 @@ func updateFunc(ctx echo.Context) error {
 		ModifiedBy:  "",
 		UpdatedAt:   util.UTCNow(),
 	}, func(db *gorm.DB) *gorm.DB {
-		return db.Where(model.User{SystemCode: body.SystemCode, Code: body.Code}).Limit(1)
+		return db.Where(model.User{SystemCode: body.SystemCode, Code: body.UserCode}).Limit(1)
 	}); err != nil {
 		return output.Failure(ctx, controller.ErrSystemError)
 	}

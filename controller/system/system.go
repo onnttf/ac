@@ -27,6 +27,7 @@ type System struct {
 
 func RegisterRoutes(g *echo.Group) {
 	g.GET("/query", queryFunc)
+
 	g.POST("/add", addFunc)
 	g.POST("/update", updateFunc)
 }

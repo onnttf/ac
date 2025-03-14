@@ -6,6 +6,7 @@ import (
 	"ac/controller"
 	"ac/service/role"
 	"ac/service/system"
+	"ac/service/user"
 	"gorm.io/gorm"
 
 	"ac/custom/input"
@@ -23,13 +24,14 @@ type Role struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	SystemCode  string    `json:"system_code"`
-	Code        string    `json:"code"`
+	RoleCode    string    `json:"role_code"`
 	ModifiedBy  string    `json:"modified_by"`
 	UpdatedAt   time.Time `json:"update_at"`
 }
 
 func RegisterRoutes(g *echo.Group) {
 	g.GET("/query", queryFunc)
+
 	g.POST("/add", addFunc)
 	g.POST("/update", updateFunc)
 	g.POST("/delete", deleteFunc)
@@ -38,7 +40,7 @@ func RegisterRoutes(g *echo.Group) {
 func deleteFunc(ctx echo.Context) error {
 	body := struct {
 		SystemCode string `json:"system_code" validate:"required,gt=0"`
-		Code       string `json:"code" validate:"required,gt=0"`
+		RoleCode   string `json:"role_code" validate:"required,gt=0"`
 	}{}
 	if err := input.BindAndValidate(ctx, &body); err != nil {
 		return output.Failure(ctx, controller.ErrInvalidInput.WithMsg(err.Error()))
@@ -50,16 +52,15 @@ func deleteFunc(ctx echo.Context) error {
 		}
 		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
 	}
-
-	if ok, err := role.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+	if ok, err := user.Validate(ctx.Request().Context(), body.SystemCode, body.RoleCode); !ok {
 		if err != nil {
-			logger.Errorf(ctx.Request().Context(), "failed to validate role, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+			logger.Errorf(ctx.Request().Context(), "failed to validate role, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.RoleCode)
 		}
-		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid role code"))
 	}
-
+	
 	err := dal.NewRepo[model.Resource]().Delete(ctx.Request().Context(), database.DB, func(db *gorm.DB) *gorm.DB {
-		return db.Where(model.Resource{SystemCode: body.SystemCode, Code: body.Code})
+		return db.Where(model.Resource{SystemCode: body.SystemCode, Code: body.RoleCode})
 	})
 	if err != nil {
 		return output.Failure(ctx, controller.ErrSystemError)
@@ -71,7 +72,7 @@ func deleteFunc(ctx echo.Context) error {
 func updateFunc(ctx echo.Context) error {
 	body := struct {
 		SystemCode  string `json:"system_code" validate:"required,gt=0"`
-		Code        string `json:"code" validate:"required,gt=0"`
+		RoleCode    string `json:"role_code" validate:"required,gt=0"`
 		Name        string `json:"name" validate:"required,gt=0"`
 		Description string `json:"description"`
 	}{}
@@ -85,12 +86,11 @@ func updateFunc(ctx echo.Context) error {
 		}
 		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
 	}
-
-	if ok, err := role.Validate(ctx.Request().Context(), body.SystemCode, body.Code); !ok {
+	if ok, err := user.Validate(ctx.Request().Context(), body.SystemCode, body.RoleCode); !ok {
 		if err != nil {
-			logger.Errorf(ctx.Request().Context(), "failed to validate role, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.Code)
+			logger.Errorf(ctx.Request().Context(), "failed to validate role, err: %s, system code: %s, code: %s", err.Error(), body.SystemCode, body.RoleCode)
 		}
-		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid system code"))
+		return output.Failure(ctx, controller.ErrSystemError.WithHint("Invalid role code"))
 	}
 
 	if err := dal.NewRepo[model.Role]().Update(ctx.Request().Context(), database.DB, &model.Role{
@@ -99,7 +99,7 @@ func updateFunc(ctx echo.Context) error {
 		ModifiedBy:  "",
 		UpdatedAt:   util.UTCNow(),
 	}, func(db *gorm.DB) *gorm.DB {
-		return db.Where(model.Role{SystemCode: body.SystemCode, Code: body.Code}).Limit(1)
+		return db.Where(model.Role{SystemCode: body.SystemCode, Code: body.RoleCode}).Limit(1)
 	}); err != nil {
 		return output.Failure(ctx, controller.ErrSystemError)
 	}
@@ -152,7 +152,7 @@ func addFunc(ctx echo.Context) error {
 		Name:        newValue.Name,
 		Description: *newValue.Description,
 		SystemCode:  newValue.SystemCode,
-		Code:        newValue.Code,
+		RoleCode:    newValue.Code,
 		ModifiedBy:  newValue.ModifiedBy,
 		UpdatedAt:   newValue.UpdatedAt,
 	})
@@ -184,7 +184,7 @@ func queryFunc(ctx echo.Context) error {
 			Name:        v.Name,
 			Description: *v.Description,
 			SystemCode:  v.SystemCode,
-			Code:        v.Code,
+			RoleCode:    v.Code,
 			ModifiedBy:  v.ModifiedBy,
 			UpdatedAt:   v.UpdatedAt,
 		})

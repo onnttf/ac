@@ -8,6 +8,7 @@ import (
 	"ac/model"
 	"context"
 	"fmt"
+
 	"gorm.io/gorm"
 )
 
@@ -17,11 +18,9 @@ import (
 func GenerateCode(ctx context.Context) (string, error) {
 	const maxAttempts = 3
 
-	for i := 0; i < maxAttempts; i++ {
-		// Generate a new code
+	for range maxAttempts {
 		tmpCode := code.GenerateResourceCode()
 
-		// Check if the code exists (including deleted records)
 		record, err := dal.NewRepo[model.Resource]().Query(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 			return db.Unscoped().Where(model.Resource{Code: tmpCode})
 		})
@@ -29,7 +28,6 @@ func GenerateCode(ctx context.Context) (string, error) {
 			return "", fmt.Errorf("failed to query system, err: %w, code: %s", err, tmpCode)
 		}
 
-		// If no record found, return the generated code
 		if record == nil {
 			return tmpCode, nil
 		}
