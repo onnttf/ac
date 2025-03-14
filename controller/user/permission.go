@@ -12,7 +12,6 @@ import (
 	"ac/service/casbin"
 	"ac/service/system"
 	"ac/service/user"
-	"fmt"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 	"strings"
@@ -54,7 +53,7 @@ func permissionGetFunc(ctx echo.Context) error {
 
 	permissionList, err := casbin.GetSubjectPermissionList(ctx.Request().Context(), body.SystemCode, body.UserCode)
 	if err != nil {
-		logger.Errorf(ctx.Request().Context(), fmt.Sprintf("failed to get permission list, err: %s", err.Error()))
+		logger.Errorf(ctx.Request().Context(), "failed to get permission list, err: %s", err.Error())
 		return output.Failure(ctx, controller.ErrSystemError)
 	}
 
@@ -65,7 +64,7 @@ func permissionGetFunc(ctx echo.Context) error {
 		permission := Permission{
 			System:        v.System,
 			User:          v.Subject,
-			Index:         strings.TrimSuffix(v.Index, "/*"),
+			Index:         v.Index,
 			indexPartList: indexPartList,
 			Action:        v.Action,
 			BeginTime:     v.BeginTime,
