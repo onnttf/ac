@@ -14,6 +14,7 @@ import (
 	"ac/controller"
 	"ac/controller/user"
 	"ac/middleware"
+	"ac/service/casbin"
 
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
@@ -43,7 +44,12 @@ import (
 func main() {
 	if err := bootstrap.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: main: failed to initialize application, error=%v\n", err)
-		return
+		panic(err)
+	}
+
+	if err := casbin.Initialize(); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: main: failed to initialize casbin, error=%v\n", err)
+		panic(err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
