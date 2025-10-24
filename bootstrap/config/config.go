@@ -28,8 +28,9 @@ type AppConfig struct {
 }
 
 var (
-	Config AppConfig
-	once   sync.Once
+	Config  AppConfig
+	once    sync.Once
+	initErr error
 )
 
 const (
@@ -49,8 +50,6 @@ func InitConfig() error {
 }
 
 func InitConfigWithPath(configPath string) error {
-	var initErr error
-
 	once.Do(func() {
 		workingDir, err := os.Getwd()
 		if err != nil {
