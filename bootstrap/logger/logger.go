@@ -21,11 +21,10 @@ type Config struct {
 var (
 	sugaredLogger *zap.SugaredLogger
 	once          sync.Once
+	initErr       error
 )
 
 func InitLogger(config Config) error {
-	var initErr error
-
 	once.Do(func() {
 		fmt.Fprintf(os.Stdout, "INFO: logger: init: started\n")
 

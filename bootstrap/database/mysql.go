@@ -14,13 +14,12 @@ import (
 )
 
 var (
-	DB   *gorm.DB
-	once sync.Once
+	DB      *gorm.DB
+	once    sync.Once
+	initErr error
 )
 
 func InitMySQL() error {
-	var initErr error
-
 	once.Do(func() {
 		fmt.Fprintf(os.Stdout, "INFO: database: init: started\n")
 
