@@ -12,6 +12,7 @@ import (
 
 	"ac/bootstrap"
 	"ac/controller"
+	"ac/controller/user"
 	"ac/middleware"
 
 	"github.com/gin-contrib/requestid"
@@ -58,6 +59,9 @@ func main() {
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 	})
+
+	innerApi := router.Group("/internal-api")
+	user.RegisterInternalRoutes(innerApi)
 
 	srv := &http.Server{
 		Addr:         ":8082",
