@@ -1,0 +1,25 @@
+# Project
+log/
+*.log
+tmp/
+dist/
+config/*.json
+!config/example.json
+dist/
+docs/
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work*
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store

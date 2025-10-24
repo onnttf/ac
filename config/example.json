@@ -1,0 +1,13 @@
+{
+  "database": {
+    "user": "",
+    "password": "",
+    "host": "",
+    "port": "",
+    "database": ""
+  },
+  "log": {
+    "level": "info",
+    "directory": "log"
+  }
+}
