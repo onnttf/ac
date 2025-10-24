@@ -14,7 +14,7 @@ import (
 // Response defines a standard JSON API response.
 type Response struct {
 	Code      int    `json:"code"`
-	RequestID string `json:"request_id"`
+	RequestId string `json:"request_id"`
 	Msg       string `json:"msg"`
 	Hint      string `json:"hint,omitempty"`
 	Data      any    `json:"data" swaggertype:"object"`
@@ -28,7 +28,7 @@ func Success(ctx *gin.Context, data any) {
 
 	ctx.JSON(http.StatusOK, Response{
 		Code:      0,
-		RequestID: requestid.Get(ctx),
+		RequestId: requestid.Get(ctx),
 		Msg:       "success",
 		Data:      data,
 	})
@@ -39,7 +39,7 @@ func Failure(ctx *gin.Context, err error) {
 		Code:      ErrSystemError.Code,
 		Msg:       ErrSystemError.Msg,
 		Hint:      ErrSystemError.Hint,
-		RequestID: requestid.Get(ctx),
+		RequestId: requestid.Get(ctx),
 		Data:      struct{}{},
 	}
 
@@ -63,7 +63,7 @@ func Failure(ctx *gin.Context, err error) {
 
 	logger.Debugf(ctx,
 		"controller: api responded with error, code=%d, msg='%s', error='%s', request_id=%s",
-		response.Code, response.Msg, response.Err, response.RequestID,
+		response.Code, response.Msg, response.Err, response.RequestId,
 	)
 
 	ctx.JSON(http.StatusOK, response)

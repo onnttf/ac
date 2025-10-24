@@ -191,8 +191,8 @@ func getBaseKV(ctx context.Context) map[string]any {
 	}
 
 	if ginCtx, ok := ctx.(*gin.Context); ok {
-		if requestID := requestid.Get(ginCtx); requestID != "" {
-			kv["request_id"] = requestID
+		if requestId := requestid.Get(ginCtx); requestId != "" {
+			kv["request_id"] = requestId
 		}
 	}
 	return kv
