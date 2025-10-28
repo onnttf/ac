@@ -8,9 +8,10 @@ import (
 
 	"ac/bootstrap/database"
 	"ac/bootstrap/logger"
+	"ac/model"
 
-	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
+	casbin "github.com/casbin/casbin/v2"
+	casbinModel "github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/gin-gonic/gin"
 )
@@ -32,14 +33,14 @@ func Initialize() error {
 
 		gormadapter.TurnOffAutoMigrate(database.DB)
 
-		adapter, err := gormadapter.NewAdapterByDB(database.DB)
+		adapter, err := gormadapter.NewAdapterByDBWithCustomTable(database.DB, &model.TblCasbinRule{}, model.TableNameTblCasbinRule)
 		if err != nil {
 			initErr = fmt.Errorf("failed to create Gorm Adapter: %w", err)
 			fmt.Fprintf(os.Stderr, "ERROR: casbin: init: create adapter failed: %v\n", err)
 			return
 		}
 
-		m, err := model.NewModelFromString(`
+		m, err := casbinModel.NewModelFromString(`
 [request_definition]
 r = sub, obj, act, time
 
@@ -69,11 +70,11 @@ m = g(r.sub, p.sub) && g2(r.obj, p.obj) && r.act == p.act && r.time >= p.begin_t
 			return
 		}
 
-		if err := enforcer.LoadPolicy(); err != nil {
-			initErr = fmt.Errorf("failed to load Casbin policy from DB: %w", err)
-			fmt.Fprintf(os.Stderr, "ERROR: casbin: init: load policy failed: %v\n", err)
-			return
-		}
+		// if err := enforcer.LoadPolicy(); err != nil {
+		// 	initErr = fmt.Errorf("failed to load Casbin policy from DB: %w", err)
+		// 	fmt.Fprintf(os.Stderr, "ERROR: casbin: init: load policy failed: %v\n", err)
+		// 	return
+		// }
 
 		Enforcer = enforcer
 		fmt.Fprintf(os.Stdout, "INFO: casbin: init: succeeded, model=memory, policy_table=casbin_rule\n")

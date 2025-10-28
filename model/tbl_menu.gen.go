@@ -12,12 +12,12 @@ const TableNameTblMenu = "tbl_menu"
 
 // TblMenu tbl_menu
 type TblMenu struct {
-	Id         int64     `gorm:"column:id;type:int unsigned;primaryKey;autoIncrement:true;comment:id" json:"id"`                                            // id
-	Code       string    `gorm:"column:code;type:varchar(255);not null;uniqueIndex:uk_menu_code,priority:1;comment:code" json:"code"`                       // code
-	Name       string    `gorm:"column:name;type:varchar(255);not null;comment:name" json:"name"`                                                           // name
-	ParentCode string    `gorm:"column:parent_code;type:varchar(255);index:idx_menu_parent_sort_deleted,priority:1;comment:parent_code" json:"parent_code"` // parent_code
+	Id         int64     `gorm:"column:id;type:int unsigned;primaryKey;autoIncrement:true;comment:id" json:"id"`                                            // Id
+	Code       string    `gorm:"column:code;type:varchar(100);not null;uniqueIndex:uk_menu_code,priority:1;comment:code" json:"code"`                       // code
+	Name       string    `gorm:"column:name;type:varchar(100);not null;comment:name" json:"name"`                                                           // name
+	ParentCode string    `gorm:"column:parent_code;type:varchar(100);index:idx_menu_parent_sort_deleted,priority:1;comment:parent_code" json:"parent_code"` // parent_code
 	Sort       int64     `gorm:"column:sort;type:int;not null;index:idx_menu_parent_sort_deleted,priority:2;comment:sort" json:"sort"`                      // sort
-	Url        string    `gorm:"column:url;type:varchar(255);comment:url" json:"url"`                                                                       // url
+	Url        string    `gorm:"column:url;type:varchar(100);comment:url" json:"url"`                                                                       // url
 	Status     int64     `gorm:"column:status;type:tinyint;not null;comment:status" json:"status"`                                                          // status
 	Visible    int64     `gorm:"column:visible;type:tinyint;not null;comment:visible" json:"visible"`                                                       // visible
 	Deleted    int64     `gorm:"column:deleted;type:tinyint;not null;index:idx_menu_parent_sort_deleted,priority:3;comment:deleted" json:"deleted"`         // deleted

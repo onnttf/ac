@@ -12,11 +12,11 @@ const TableNameTblUser = "tbl_user"
 
 // TblUser tbl_user
 type TblUser struct {
-	Id           int64     `gorm:"column:id;type:int unsigned;primaryKey;autoIncrement:true;comment:id" json:"id"`                          // id
-	Code         string    `gorm:"column:code;type:varchar(255);not null;uniqueIndex:uk_user_code,priority:1;comment:code" json:"code"`     // code
-	Name         string    `gorm:"column:name;type:varchar(255);not null;index:idx_user_name,priority:1;comment:name" json:"name"`          // name
-	Email        string    `gorm:"column:email;type:varchar(255);not null;uniqueIndex:uk_user_email,priority:1;comment:email" json:"email"` // email
-	PasswordHash string    `gorm:"column:password_hash;type:varchar(255);not null;comment:password_hash" json:"password_hash"`              // password_hash
+	Id           int64     `gorm:"column:id;type:int unsigned;primaryKey;autoIncrement:true;comment:id" json:"id"`                          // Id
+	Code         string    `gorm:"column:code;type:varchar(100);not null;uniqueIndex:uk_user_code,priority:1;comment:code" json:"code"`     // code
+	Name         string    `gorm:"column:name;type:varchar(100);not null;index:idx_user_name,priority:1;comment:name" json:"name"`          // name
+	Email        string    `gorm:"column:email;type:varchar(100);not null;uniqueIndex:uk_user_email,priority:1;comment:email" json:"email"` // email
+	PasswordHash string    `gorm:"column:password_hash;type:varchar(100);not null;comment:password_hash" json:"password_hash"`              // password_hash
 	Status       int64     `gorm:"column:status;type:tinyint;not null;comment:status" json:"status"`                                        // status
 	Deleted      int64     `gorm:"column:deleted;type:tinyint;not null;comment:deleted" json:"deleted"`                                     // deleted
 	CreatedAt    time.Time `gorm:"column:created_at;type:datetime;not null;default:CURRENT_TIMESTAMP;comment:created_at" json:"created_at"` // created_at
