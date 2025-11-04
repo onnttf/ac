@@ -197,12 +197,12 @@ func getBaseKV(ctx context.Context) map[string]any {
 	return kv
 }
 
-func Infof(ctx context.Context, format string, args ...any) {
-	LogWith(ctx, zapcore.InfoLevel, fmt.Sprintf(format, args...), nil)
-}
-
 func Debugf(ctx context.Context, format string, args ...any) {
 	LogWith(ctx, zapcore.DebugLevel, fmt.Sprintf(format, args...), nil)
+}
+
+func Infof(ctx context.Context, format string, args ...any) {
+	LogWith(ctx, zapcore.InfoLevel, fmt.Sprintf(format, args...), nil)
 }
 
 func Warnf(ctx context.Context, format string, args ...any) {
