@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *gin.Engine) {
-	router := r.Group("/menu")
+func RegisterInternalRoutes(internalApi *gin.RouterGroup) {
+	router := internalApi.Group("/menu")
 
 	router.POST("/create", internalApiMenuCreate)
 	router.POST("/update", internalApiMenuUpdate)

@@ -12,6 +12,8 @@ import (
 
 	"ac/bootstrap"
 	"ac/controller"
+	"ac/controller/menu"
+	"ac/controller/role"
 	"ac/controller/user"
 	"ac/middleware"
 	"ac/service/casbin"
@@ -66,8 +68,10 @@ func main() {
 		})
 	})
 
-	innerApi := router.Group("/internal-api")
-	user.RegisterInternalRoutes(innerApi)
+	internalApi := router.Group("/internal-api")
+	user.RegisterInternalRoutes(internalApi)
+	menu.RegisterInternalRoutes(internalApi)
+	role.RegisterInternalRoutes(internalApi)
 
 	srv := &http.Server{
 		Addr:         ":8082",

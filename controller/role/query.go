@@ -14,7 +14,7 @@ import (
 type QueryInput struct {
 	Page     int    `form:"page" binding:"required,min=1" default:"1"`
 	PageSize int    `form:"page_size" binding:"required,min=1,max=100" default:"10"`
-	Name     string `json:"name" binding:"omitempty,min=1"`
+	Name     string `form:"name" binding:"omitempty,min=1"`
 }
 
 type QueryOutput struct {
@@ -30,7 +30,7 @@ type QueryOutput struct {
 // @Router /internal-api/role/query [get]
 func internalApiRoleQuery(ctx *gin.Context) {
 	var input QueryInput
-	if err := ctx.ShouldBindQuery(&input); err != nil {
+	if err := ctx.ShouldBind(&input); err != nil {
 		logger.Errorf(ctx, "role: query: failed, reason=invalid input, error=%v", err)
 		controller.Failure(ctx, controller.ErrInvalidInput.WithError(err))
 		return

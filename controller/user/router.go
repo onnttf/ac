@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterInternalRoutes(r *gin.RouterGroup) {
-	router := r.Group("/user")
+func RegisterInternalRoutes(internalApi *gin.RouterGroup) {
+	router := internalApi.Group("/user")
 
 	router.POST("/create", internalApiUserCreate)
 	router.POST("/update", internalApiUserUpdate)

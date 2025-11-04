@@ -34,7 +34,7 @@ type ListRecord struct {
 // @Router /internal-api/user/list [get]
 func internalApiUserList(ctx *gin.Context) {
 	var input ListInput
-	if err := ctx.ShouldBindQuery(&input); err != nil {
+	if err := ctx.ShouldBind(&input); err != nil {
 		logger.Errorf(ctx, "user: list: failed, reason=invalid input, error=%v", err)
 		controller.Failure(ctx, controller.ErrInvalidInput.WithError(err))
 		return

@@ -31,7 +31,7 @@ func internalApiMenuDelete(ctx *gin.Context) {
 		return
 	}
 
-	menuRepo := dal.NewRepo[model.TblRole]()
+	menuRepo := dal.NewRepo[model.TblMenu]()
 
 	menu, err := menuRepo.QueryOne(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 		return db.Where("code = ?", input.Code)

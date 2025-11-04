@@ -31,7 +31,7 @@ func internalApiUserDelete(ctx *gin.Context) {
 		return
 	}
 
-	userRepo := dal.NewRepo[model.TblRole]()
+	userRepo := dal.NewRepo[model.TblUser]()
 
 	user, err := userRepo.QueryOne(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 		return db.Where("code = ?", input.Code)

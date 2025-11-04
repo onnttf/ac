@@ -52,7 +52,7 @@ func internalApiRoleList(ctx *gin.Context) {
 	data["b"] = b
 	controller.Success(ctx, data)
 	// var input ListInput
-	// if err := ctx.ShouldBindQuery(&input); err != nil {
+	// if err := ctx.ShouldBind(&input); err != nil {
 	// 	logger.Errorf(ctx, "role: list: failed, reason=invalid input, error=%v", err)
 	// 	controller.Failure(ctx, controller.ErrInvalidInput.WithError(err))
 	// 	return

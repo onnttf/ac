@@ -15,7 +15,6 @@ import (
 type UpdateInput struct {
 	Code string `json:"code" binding:"required,len=36"`
 	Name string `json:"name" binding:"required,min=6,max=50"`
-	Url  string `json:"url" binding:"required,url"`
 }
 
 type UpdateOutput struct{}
@@ -60,7 +59,7 @@ func internalApiRoleUpdate(ctx *gin.Context) {
 		return
 	}
 
-	logger.Infof(ctx, "role: update: succeeded, id=%d, code=%s, url=%s",
+	logger.Infof(ctx, "role: update: succeeded, id=%d, code=%s",
 		role.Id, role.Code)
 
 	controller.Success(ctx, UpdateOutput{})
