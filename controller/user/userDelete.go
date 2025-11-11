@@ -1,13 +1,15 @@
 package user
 
 import (
+	"time"
+
 	"ac/bootstrap/database"
 	"ac/controller"
 	"ac/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/onnttf/kit/dal"
-	"github.com/onnttf/kit/time"
+
 	"gorm.io/gorm"
 )
 
@@ -44,7 +46,7 @@ func userDelete(ctx *gin.Context) {
 	}
 
 	user.Deleted = model.Deleted
-	user.UpdatedAt = time.NowUTC()
+	user.UpdatedAt = time.Now()
 
 	if err := userRepo.Update(ctx, database.DB, user, func(db *gorm.DB) *gorm.DB {
 		return db.Where("code = ?", input.Code)

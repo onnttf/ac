@@ -1,13 +1,15 @@
 package menu
 
 import (
+	"time"
+
 	"ac/bootstrap/database"
 	"ac/controller"
 	"ac/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/onnttf/kit/dal"
-	"github.com/onnttf/kit/time"
+
 	"gorm.io/gorm"
 )
 
@@ -44,7 +46,7 @@ func menuDelete(ctx *gin.Context) {
 	}
 
 	menu.Deleted = model.Deleted
-	menu.UpdatedAt = time.NowUTC()
+	menu.UpdatedAt = time.Now()
 
 	if err := menuRepo.Update(ctx, database.DB, menu, func(db *gorm.DB) *gorm.DB {
 		return db.Where("code = ?", input.Code)

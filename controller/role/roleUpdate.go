@@ -1,13 +1,14 @@
 package role
 
 import (
+	"time"
+
 	"ac/bootstrap/database"
 	"ac/controller"
 	"ac/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/onnttf/kit/dal"
-	"github.com/onnttf/kit/time"
 	"gorm.io/gorm"
 )
 
@@ -45,7 +46,7 @@ func roleUpdate(ctx *gin.Context) {
 	}
 
 	role.Name = input.Name
-	role.UpdatedAt = time.NowUTC()
+	role.UpdatedAt = time.Now()
 
 	if err := roleRepo.Update(ctx, database.DB, role, func(db *gorm.DB) *gorm.DB {
 		return db.Where("code = ?", input.Code)

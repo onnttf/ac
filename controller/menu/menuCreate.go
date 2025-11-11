@@ -2,6 +2,7 @@ package menu
 
 import (
 	"fmt"
+	"time"
 
 	"ac/bootstrap/database"
 	"ac/controller"
@@ -10,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/onnttf/kit/dal"
-	"github.com/onnttf/kit/time"
+
 	"gorm.io/gorm"
 )
 
@@ -43,7 +44,7 @@ func menuCreate(ctx *gin.Context) {
 		return
 	}
 
-	now := time.NowUTC()
+	now := time.Now()
 	newValue := &model.TblMenu{
 		Code:       util.GenerateCode(),
 		Name:       input.Name,

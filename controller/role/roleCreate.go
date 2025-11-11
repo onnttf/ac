@@ -1,6 +1,8 @@
 package role
 
 import (
+	"time"
+
 	"ac/bootstrap/database"
 	"ac/controller"
 	"ac/model"
@@ -8,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/onnttf/kit/dal"
-	"github.com/onnttf/kit/time"
 	"gorm.io/gorm"
 )
 
@@ -34,7 +35,7 @@ func roleCreate(ctx *gin.Context) {
 		return
 	}
 
-	now := time.NowUTC()
+	now := time.Now()
 	newValue := &model.TblRole{
 		Code:       util.GenerateCode(),
 		Name:       input.Name,

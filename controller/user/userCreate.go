@@ -1,6 +1,8 @@
 package user
 
 import (
+	"time"
+
 	"ac/bootstrap/database"
 	"ac/controller"
 	"ac/model"
@@ -8,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/onnttf/kit/dal"
-	"github.com/onnttf/kit/time"
+
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -60,7 +62,7 @@ func userCreate(ctx *gin.Context) {
 	}
 
 	// Create new user
-	now := time.NowUTC()
+	now := time.Now()
 	newValue := &model.TblUser{
 		Code:         util.GenerateCode(),
 		Name:         input.Name,
