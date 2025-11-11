@@ -28,28 +28,19 @@ func InitLogger(config Config) error {
 	once.Do(func() {
 		fmt.Fprintf(os.Stdout, "INFO: logger: init: started\n")
 
+		// Get working directory
 		workingDir, err := os.Getwd()
 		if err != nil {
 			initErr = fmt.Errorf("failed to get working directory for logger: %w", err)
-			fmt.Fprintf(
-				os.Stderr,
-				"ERROR: logger: init: failed, reason=get working dir, error=%v\n",
-				initErr,
-			)
+			fmt.Fprintf(os.Stderr, "ERROR: logger: init: failed, reason=get working dir, error=%v\n", initErr)
 			return
 		}
 
+		// Create log directory
 		logDirectory := filepath.Join(workingDir, config.Directory)
 		if err := os.MkdirAll(logDirectory, 0o744); err != nil {
-			initErr = fmt.Errorf(
-				"failed to create log directory '%s': %w",
-				logDirectory, err,
-			)
-			fmt.Fprintf(
-				os.Stderr,
-				"ERROR: logger: init: failed, reason=create log dir, path=%s, error=%v\n",
-				logDirectory, initErr,
-			)
+			initErr = fmt.Errorf("failed to create log directory '%s': %w", logDirectory, err)
+			fmt.Fprintf(os.Stderr, "ERROR: logger: init: failed, reason=create log dir, path=%s, error=%v\n", logDirectory, initErr)
 			return
 		}
 

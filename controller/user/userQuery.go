@@ -2,7 +2,6 @@ package user
 
 import (
 	"ac/bootstrap/database"
-	"ac/bootstrap/logger"
 	"ac/controller"
 	"ac/model"
 
@@ -11,14 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
-type QueryInput struct {
+type userQueryInput struct {
 	Page     int    `form:"page" binding:"required,min=1" default:"1"`
 	PageSize int    `form:"page_size" binding:"required,min=1,max=100" default:"10"`
 	Email    string `form:"email" binding:"omitempty,email"`
 	Name     string `form:"name" binding:"omitempty,min=1"`
 }
 
-type QueryOutput struct {
+type userQueryOutput struct {
 	Code  string `json:"code"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
@@ -26,13 +25,12 @@ type QueryOutput struct {
 
 // @Summary Query a user by email or name
 // @Tags user
-// @Param input query QueryInput false "input"
-// @Response 200 {object} controller.Response{data=QueryOutput} "output"
-// @Router /internal-api/user/query [get]
-func internalApiUserQuery(ctx *gin.Context) {
-	var input QueryInput
+// @Param input query userQueryInput false "input"
+// @Response 200 {object} controller.Response{data=userQueryOutput} "output"
+// @Router /user/query [get]
+func userQuery(ctx *gin.Context) {
+	var input userQueryInput
 	if err := ctx.ShouldBind(&input); err != nil {
-		logger.Errorf(ctx, "user: query: failed, reason=invalid input, error=%v", err)
 		controller.Failure(ctx, controller.ErrInvalidInput.WithError(err))
 		return
 	}
@@ -49,17 +47,15 @@ func internalApiUserQuery(ctx *gin.Context) {
 		return db
 	})
 	if err != nil {
-		logger.Errorf(ctx, "user: query: failed, reason=query user, error=%v", err)
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 	if user == nil {
-		logger.Warnf(ctx, "user: query: failed, reason=user not found, input=%+v", input)
 		controller.Failure(ctx, controller.ErrInvalidInput.Withmsg("user not found"))
 		return
 	}
 
-	controller.Success(ctx, QueryOutput{
+	controller.Success(ctx, userQueryOutput{
 		Code:  user.Code,
 		Name:  user.Name,
 		Email: user.Email,

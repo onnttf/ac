@@ -2,7 +2,6 @@ package role
 
 import (
 	"ac/bootstrap/database"
-	"ac/bootstrap/logger"
 	"ac/controller"
 	"ac/model"
 
@@ -11,13 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
-type QueryInput struct {
+type roleQueryInput struct {
 	Page     int    `form:"page" binding:"required,min=1" default:"1"`
 	PageSize int    `form:"page_size" binding:"required,min=1,max=100" default:"10"`
 	Name     string `form:"name" binding:"omitempty,min=1"`
 }
 
-type QueryOutput struct {
+type roleQueryOutput struct {
 	Id   int64  `json:"id"`
 	Code string `json:"code"`
 	Name string `json:"name"`
@@ -25,13 +24,12 @@ type QueryOutput struct {
 
 // @Summary Query roles by fields
 // @Tags role
-// @Param input query QueryInput false "input"
-// @Response 200 {object} controller.Response{data=QueryOutput} "output"
-// @Router /internal-api/role/query [get]
-func internalApiRoleQuery(ctx *gin.Context) {
-	var input QueryInput
+// @Param input query roleQueryInput false "input"
+// @Response 200 {object} controller.Response{data=roleQueryOutput} "output"
+// @Router /role/query [get]
+func roleQuery(ctx *gin.Context) {
+	var input roleQueryInput
 	if err := ctx.ShouldBind(&input); err != nil {
-		logger.Errorf(ctx, "role: query: failed, reason=invalid input, error=%v", err)
 		controller.Failure(ctx, controller.ErrInvalidInput.WithError(err))
 		return
 	}
@@ -45,17 +43,15 @@ func internalApiRoleQuery(ctx *gin.Context) {
 		return db
 	})
 	if err != nil {
-		logger.Errorf(ctx, "role: query: failed, reason=query role, error=%v", err)
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 	if role == nil {
-		logger.Warnf(ctx, "role: query: failed, reason=role not found, input=%+v", input)
 		controller.Failure(ctx, controller.ErrInvalidInput.Withmsg("role not found"))
 		return
 	}
 
-	controller.Success(ctx, QueryOutput{
+	controller.Success(ctx, roleQueryOutput{
 		Id:   role.Id,
 		Code: role.Code,
 		Name: role.Name,

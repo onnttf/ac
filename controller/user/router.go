@@ -4,13 +4,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterInternalRoutes(internalApi *gin.RouterGroup) {
-	router := internalApi.Group("/user")
+func RegisterRoutes(api *gin.RouterGroup) {
+	router := api.Group("/user")
 
-	router.POST("/create", internalApiUserCreate)
-	router.POST("/update", internalApiUserUpdate)
-	router.POST("/delete", internalApiUserDelete)
-	router.GET("/fetch", internalApiUserFetch)
-	router.GET("/list", internalApiUserList)
-	router.GET("/query", internalApiUserQuery)
+	router.POST("/create", userCreate)
+	router.POST("/update", userUpdate)
+	router.POST("/delete", userDelete)
+	router.GET("/fetch", userFetch)
+	router.GET("/list", userList)
+	router.GET("/query", userQuery)
+	router.POST("/role/assign", userRoleAssign)
+	router.POST("/role/remove", userRoleRemove)
+	router.GET("/role", userRole)
 }

@@ -2,7 +2,6 @@ package user
 
 import (
 	"ac/bootstrap/database"
-	"ac/bootstrap/logger"
 	"ac/controller"
 	"ac/model"
 
@@ -11,17 +10,17 @@ import (
 	"gorm.io/gorm"
 )
 
-type ListInput struct {
+type userListInput struct {
 	Page     int `form:"page" binding:"required,min=1" default:"1"`
 	PageSize int `form:"page_size" binding:"required,min=1,max=100" default:"10"`
 }
 
-type ListOutput struct {
-	Total int64        `json:"total"`
-	List  []ListRecord `json:"list"`
+type userListOutput struct {
+	Total int64            `json:"total"`
+	List  []userListRecord `json:"list"`
 }
 
-type ListRecord struct {
+type userListRecord struct {
 	Code  string `json:"code"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
@@ -29,13 +28,12 @@ type ListRecord struct {
 
 // @Summary List users with pagination
 // @Tags user
-// @Param input query ListInput true "input"
-// @Response 200 {object} controller.Response{data=ListOutput} "output"
-// @Router /internal-api/user/list [get]
-func internalApiUserList(ctx *gin.Context) {
-	var input ListInput
+// @Param input query userListInput true "input"
+// @Response 200 {object} controller.Response{data=userListOutput} "output"
+// @Router /user/list [get]
+func userList(ctx *gin.Context) {
+	var input userListInput
 	if err := ctx.ShouldBind(&input); err != nil {
-		logger.Errorf(ctx, "user: list: failed, reason=invalid input, error=%v", err)
 		controller.Failure(ctx, controller.ErrInvalidInput.WithError(err))
 		return
 	}
@@ -46,26 +44,24 @@ func internalApiUserList(ctx *gin.Context) {
 		return db
 	})
 	if err != nil {
-		logger.Errorf(ctx, "user: list: failed, reason=count user, error=%v", err)
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 
 	userList, err := userRepo.Query(ctx, database.DB, dal.Paginate(input.Page, input.PageSize), dal.OrderBy("id", "DESC"))
 	if err != nil {
-		logger.Errorf(ctx, "user: list: failed, reason=query user, error=%v", err)
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 
-	list := make([]ListRecord, len(userList))
+	list := make([]userListRecord, len(userList))
 	for i, u := range userList {
-		list[i] = ListRecord{
+		list[i] = userListRecord{
 			Code:  u.Code,
 			Name:  u.Name,
 			Email: u.Email,
 		}
 	}
 
-	controller.Success(ctx, ListOutput{Total: total, List: list})
+	controller.Success(ctx, userListOutput{Total: total, List: list})
 }

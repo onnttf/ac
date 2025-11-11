@@ -4,11 +4,9 @@ import (
 	"fmt"
 
 	"ac/bootstrap/database"
-	"ac/bootstrap/logger"
 	"ac/controller"
-	"ac/util"
-
 	"ac/model"
+	"ac/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/onnttf/kit/dal"
@@ -16,31 +14,31 @@ import (
 	"gorm.io/gorm"
 )
 
-type CreateInput struct {
+type menuCreateInput struct {
 	Name       string `json:"name" binding:"required,min=1,max=50"`
 	Url        string `json:"url" binding:"required,min=1,max=200"`
 	ParentCode string `json:"parent_code"`
 }
 
-type CreateOutput struct {
+type menuCreateOutput struct {
 	Code string `json:"code"`
 }
 
 // @Summary Create a new menu
 // @Tags menu
-// @Param input body CreateInput true "input"
-// @Response 200 {object} controller.Response{data=CreateOutput} "output"
-// @Router /internal-api/menu/create [post]
-func internalApiMenuCreate(ctx *gin.Context) {
-	var input CreateInput
+// @Param input body menuCreateInput true "input"
+// @Response 200 {object} controller.Response{data=menuCreateOutput} "output"
+// @Router /menu/create [post]
+func menuCreate(ctx *gin.Context) {
+	var input menuCreateInput
 	if err := ctx.ShouldBind(&input); err != nil {
-		logger.Errorf(ctx, "menu: create: failed, reason=invalid input, error=%v", err)
+
 		controller.Failure(ctx, controller.ErrInvalidInput.WithError(err))
 		return
 	}
 
 	if err := validateUrl(ctx, input.Url); err != nil {
-		logger.Errorf(ctx, "menu: create: failed, reason=check url, error=%v", err)
+
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
@@ -58,24 +56,23 @@ func internalApiMenuCreate(ctx *gin.Context) {
 
 	menuRepo := dal.NewRepo[model.TblMenu]()
 	if input.ParentCode != "" {
+
 		parent, err := menuRepo.QueryOne(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 			return db.Where("code = ?", input.ParentCode)
 		})
 		if err != nil {
-			logger.Errorf(ctx, "menu: create: failed, reason=query menu, error=%v, parent_code=%s", err, input.ParentCode)
 			controller.Failure(ctx, controller.ErrSystemError.WithHint("parent menu not found"))
 			return
 		}
 		if parent == nil {
-			logger.Warnf(ctx, "menu: create: failed, reason=parent menu not found, parent_code=%s", input.ParentCode)
 			controller.Failure(ctx, controller.ErrSystemError.WithHint("parent menu not found"))
 			return
 		}
+
 		lastChild, err := menuRepo.QueryOne(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 			return db.Where("parent_code = ?", input.ParentCode).Order("sort DESC")
 		})
 		if err != nil {
-			logger.Errorf(ctx, "menu: create: failed, reason=query last child menu, error=%v, parent_code=%s", err, input.ParentCode)
 			controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 			return
 		}
@@ -85,15 +82,12 @@ func internalApiMenuCreate(ctx *gin.Context) {
 	}
 
 	if err := menuRepo.Insert(ctx, database.DB, newValue); err != nil {
-		logger.Errorf(ctx, "menu: create: failed, reason=insert menu, error=%v", err)
+
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 
-	logger.Infof(ctx, "menu: create: succeeded, id=%d, code=%s, name=%s",
-		newValue.Id, newValue.Code, newValue.Name)
-
-	controller.Success(ctx, CreateOutput{
+	controller.Success(ctx, menuCreateOutput{
 		Code: newValue.Code,
 	})
 }
@@ -108,5 +102,6 @@ func validateUrl(ctx *gin.Context, url string) error {
 	if count > 0 {
 		return fmt.Errorf("url '%s' already exists", url)
 	}
+
 	return nil
 }

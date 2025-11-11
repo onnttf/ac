@@ -9,23 +9,25 @@ import (
 	"github.com/bytedance/sonic"
 )
 
-type DatabaseConfig struct {
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Host     string `json:"host"`
-	Port     string `json:"port"`
-	Database string `json:"database"`
-}
+type (
+	DatabaseConfig struct {
+		User     string `json:"user"`
+		Password string `json:"password"`
+		Host     string `json:"host"`
+		Port     string `json:"port"`
+		Database string `json:"database"`
+	}
 
-type LogConfig struct {
-	Level     string `json:"level"`
-	Directory string `json:"directory"`
-}
+	LogConfig struct {
+		Level     string `json:"level"`
+		Directory string `json:"directory"`
+	}
 
-type AppConfig struct {
-	Database DatabaseConfig `json:"database"`
-	Log      LogConfig      `json:"log"`
-}
+	AppConfig struct {
+		Database DatabaseConfig `json:"database"`
+		Log      LogConfig      `json:"log"`
+	}
+)
 
 var (
 	Config  AppConfig

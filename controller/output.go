@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"ac/bootstrap/logger"
 	"ac/util"
 
 	"github.com/gin-contrib/requestid"
@@ -60,11 +59,6 @@ func Failure(ctx *gin.Context, err error) {
 	} else if err != nil {
 		response.Err = err.Error()
 	}
-
-	logger.Debugf(ctx,
-		"controller: api responded with error, code=%d, msg='%s', error='%s', request_id=%s",
-		response.Code, response.Msg, response.Err, response.RequestId,
-	)
 
 	ctx.JSON(http.StatusOK, response)
 }

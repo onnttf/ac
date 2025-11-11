@@ -12,9 +12,11 @@ import (
 
 	"ac/bootstrap"
 	"ac/controller"
-	"ac/controller/menu"
-	"ac/controller/role"
-	"ac/controller/user"
+
+	apiMenu "ac/controller/menu"
+	apiPermission "ac/controller/permission"
+	apiRole "ac/controller/role"
+	apiUser "ac/controller/user"
 	"ac/middleware"
 	"ac/service/casbin"
 
@@ -39,7 +41,7 @@ import (
 // @License.Url   https://opensource.org/licenses/MIT
 
 // @Host      localhost:8082
-// @BasePath  /
+// @BasePath  /api
 // @Schemes   http https
 // @Accept    json
 // @Produce   json
@@ -68,10 +70,11 @@ func main() {
 		})
 	})
 
-	internalApi := router.Group("/internal-api")
-	user.RegisterInternalRoutes(internalApi)
-	menu.RegisterInternalRoutes(internalApi)
-	role.RegisterInternalRoutes(internalApi)
+	api := router.Group("/api")
+	apiUser.RegisterRoutes(api)
+	apiRole.RegisterRoutes(api)
+	apiMenu.RegisterRoutes(api)
+	apiPermission.RegisterRoutes(api)
 
 	srv := &http.Server{
 		Addr:         ":8082",
@@ -85,6 +88,7 @@ func main() {
 		fmt.Fprintf(os.Stdout, "INFO: main: http server starting on address=%s\n", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fmt.Fprintf(os.Stderr, "ERROR: main: http server failed to start, error=%v\n", err)
+			panic(err)
 		}
 	}()
 
