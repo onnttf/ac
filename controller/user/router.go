@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// RegisterRoutes registers user-related routes.
 func RegisterRoutes(api *gin.RouterGroup) {
 	router := api.Group("/user")
 

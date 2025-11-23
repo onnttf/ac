@@ -21,7 +21,7 @@ type roleDeleteOutput struct{}
 // @Summary Delete an existing role
 // @Tags role
 // @Param input body roleDeleteInput true "input"
-// @Response 200 {object} controller.Response{data=roleDeleteOutput} "output"
+// @Success 200 {object} controller.Response{data=roleDeleteOutput} "output"
 // @Router /role/delete [post]
 func roleDelete(ctx *gin.Context) {
 	var input roleDeleteInput

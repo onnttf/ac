@@ -25,7 +25,7 @@ type roleCreateOutput struct {
 // @Summary Create a new role
 // @Tags role
 // @Param input body roleCreateInput true "input"
-// @Response 200 {object} controller.Response{data=roleCreateOutput} "output"
+// @Success 200 {object} controller.Response{data=roleCreateOutput} "output"
 // @Router /role/create [post]
 func roleCreate(ctx *gin.Context) {
 	var input roleCreateInput

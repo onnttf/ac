@@ -18,14 +18,12 @@ type userRoleRemoveInput struct {
 	RoleCodes []string `json:"role_codes" binding:"required,min=1,dive,len=36"`
 }
 
-type userRoleRemoveOutput struct {
-	RemovedCount int `json:"removed_count"`
-}
+type userRoleRemoveOutput struct{}
 
 // @Summary Remove roles from a user
 // @Tags user
 // @Param input body userRoleRemoveInput true "input"
-// @Response 200 {object} controller.Response{data=userRoleRemoveOutput} "output"
+// @Success 200 {object} controller.Response{data=userRoleRemoveOutput} "output"
 // @Router /user/role/remove [post]
 func userRoleRemove(ctx *gin.Context) {
 	var input userRoleRemoveInput
@@ -78,7 +76,7 @@ func userRoleRemove(ctx *gin.Context) {
 	}
 
 	// 3. Ensure roles are assigned to the user before attempting removal
-	assignedRoles, err := casbin.GetUserRoles(ctx, input.UserCode)
+	assignedRoles, err := casbin.GetRolesForUser(ctx, input.UserCode)
 	if err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
@@ -102,12 +100,10 @@ func userRoleRemove(ctx *gin.Context) {
 		return
 	}
 
-	// 4. Remove roles from the user
-	removedCount, err := casbin.RemoveRolesFromUser(ctx, input.UserCode, rolesToRemove)
-	if err != nil {
+	if err := casbin.RemoveRolesFromUser(ctx, input.UserCode, rolesToRemove); err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 
-	controller.Success(ctx, userRoleRemoveOutput{RemovedCount: removedCount})
+	controller.Success(ctx, userRoleRemoveOutput{})
 }

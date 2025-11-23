@@ -1,6 +1,7 @@
 package permission
 
 import (
+	"strings"
 	"time"
 
 	"ac/bootstrap/database"
@@ -25,7 +26,7 @@ type permissionUpdateOutput struct{}
 // @Summary Update an existing permission (action or time range)
 // @Tags permission
 // @Param input body permissionUpdateInput true "input"
-// @Response 200 {object} controller.Response{data=permissionUpdateOutput} "output"
+// @Success 200 {object} controller.Response{data=permissionUpdateOutput} "output"
 // @Router /permission/update [post]
 func permissionUpdate(ctx *gin.Context) {
 	var input permissionUpdateInput
@@ -77,18 +78,35 @@ func permissionUpdate(ctx *gin.Context) {
 		return
 	}
 
-	// Remove the old policy
-	err = casbin.RemovePolicy(ctx, rule.V0, rule.V1, rule.V2, oldBeginTime, oldEndTime)
-	if err != nil {
-		controller.Failure(ctx, controller.ErrSystemError.WithHint("Failed to remove old policy"))
+	if strings.HasPrefix(rule.V0, casbin.PrefixUser) {
+		userCode := strings.TrimPrefix(rule.V0, casbin.PrefixUser)
+		if err := casbin.RemovePoliciesFromUser(ctx, userCode, []casbin.Policy{{Object: rule.V1, Action: rule.V2, BeginTime: oldBeginTime, EndTime: oldEndTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithHint("Failed to remove old policy").WithError(err))
+			return
+		}
+	} else if strings.HasPrefix(rule.V0, casbin.PrefixRole) {
+		roleCode := strings.TrimPrefix(rule.V0, casbin.PrefixRole)
+		if err := casbin.RemovePoliciesFromRole(ctx, roleCode, []casbin.Policy{{Object: rule.V1, Action: rule.V2, BeginTime: oldBeginTime, EndTime: oldEndTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithHint("Failed to remove old policy").WithError(err))
+			return
+		}
+	} else {
+		controller.Failure(ctx, controller.ErrSystemError.WithHint("Unknown subject prefix in rule"))
 		return
 	}
 
-	// Add the new policy
-	err = casbin.AddPolicy(ctx, rule.V0, rule.V1, input.Action, input.BeginTime, input.EndTime)
-	if err != nil {
-		controller.Failure(ctx, controller.ErrSystemError.WithError(err).WithHint("Failed to add new policy"))
-		return
+	if strings.HasPrefix(rule.V0, casbin.PrefixUser) {
+		userCode := strings.TrimPrefix(rule.V0, casbin.PrefixUser)
+		if err := casbin.AssignPoliciesToUser(ctx, userCode, []casbin.Policy{{Object: rule.V1, Action: input.Action, BeginTime: input.BeginTime, EndTime: input.EndTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithError(err).WithHint("Failed to add new policy"))
+			return
+		}
+	} else {
+		roleCode := strings.TrimPrefix(rule.V0, casbin.PrefixRole)
+		if err := casbin.AssignPoliciesToRole(ctx, roleCode, []casbin.Policy{{Object: rule.V1, Action: input.Action, BeginTime: input.BeginTime, EndTime: input.EndTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithError(err).WithHint("Failed to add new policy"))
+			return
+		}
 	}
 
 	controller.Success(ctx, permissionUpdateOutput{})

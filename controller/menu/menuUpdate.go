@@ -24,7 +24,7 @@ type menuUpdateOutput struct{}
 // @Summary Update an existing menu
 // @Tags menu
 // @Param input body menuUpdateInput true "input"
-// @Response 200 {object} controller.Response{data=menuUpdateOutput} "output"
+// @Success 200 {object} controller.Response{data=menuUpdateOutput} "output"
 // @Router /menu/update [post]
 func menuUpdate(ctx *gin.Context) {
 	var input menuUpdateInput

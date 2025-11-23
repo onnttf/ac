@@ -23,7 +23,7 @@ type userFetchOutput struct {
 // @Summary Fetch a user by code
 // @Tags user
 // @Param input query userFetchInput true "input"
-// @Response 200 {object} controller.Response{data=userFetchOutput} "output"
+// @Success 200 {object} controller.Response{data=userFetchOutput} "output"
 // @Router /user/fetch [get]
 func userFetch(ctx *gin.Context) {
 	var input userFetchInput

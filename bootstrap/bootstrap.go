@@ -9,6 +9,7 @@ import (
 	"ac/bootstrap/logger"
 )
 
+// Initialize loads configuration, initializes logging and the database.
 func Initialize() error {
 	fmt.Fprintf(os.Stdout, "INFO: bootstrap: application initializing\n")
 
@@ -18,8 +19,8 @@ func Initialize() error {
 	}
 
 	logConfig := logger.Config{
-		Directory: config.Config.Log.Directory,
-		Level:     config.Config.Log.Level,
+		Directory: config.Config().Log.Directory,
+		Level:     config.Config().Log.Level,
 	}
 	if err := logger.InitLogger(logConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: bootstrap: logger initialization failed, error=%v\n", err)

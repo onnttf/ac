@@ -28,7 +28,7 @@ type permissionFetchOutput struct {
 // @Summary Fetch a permission by ID
 // @Tags permission
 // @Param input query permissionFetchInput true "input"
-// @Response 200 {object} controller.Response{data=permissionFetchOutput} "output"
+// @Success 200 {object} controller.Response{data=permissionFetchOutput} "output"
 // @Router /permission/fetch [get]
 func permissionFetch(ctx *gin.Context) {
 	var input permissionFetchInput

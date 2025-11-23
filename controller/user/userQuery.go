@@ -26,7 +26,7 @@ type userQueryOutput struct {
 // @Summary Query a user by email or name
 // @Tags user
 // @Param input query userQueryInput false "input"
-// @Response 200 {object} controller.Response{data=userQueryOutput} "output"
+// @Success 200 {object} controller.Response{data=userQueryOutput} "output"
 // @Router /user/query [get]
 func userQuery(ctx *gin.Context) {
 	var input userQueryInput
@@ -39,10 +39,10 @@ func userQuery(ctx *gin.Context) {
 
 	user, err := userRepo.QueryOne(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 		if input.Email != "" {
-			db.Where("email = ?", input.Email)
+			db = db.Where("email = ?", input.Email)
 		}
 		if input.Name != "" {
-			db.Where("name LIKE ?", "%"+input.Name+"%")
+			db = db.Where("name LIKE ?", "%"+input.Name+"%")
 		}
 		return db
 	})

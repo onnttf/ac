@@ -19,14 +19,12 @@ type roleUserRemoveInput struct {
 	UserCodes []string `json:"user_codes" binding:"required,min=1,dive,len=36"`
 }
 
-type roleUserRemoveOutput struct {
-	RemovedCount int `json:"removed_count"`
-}
+type roleUserRemoveOutput struct{}
 
 // @Summary Remove users from a role
 // @Tags role
 // @Param input body roleUserRemoveInput true "input"
-// @Response 200 {object} controller.Response{data=roleUserRemoveOutput} "output"
+// @Success 200 {object} controller.Response{data=roleUserRemoveOutput} "output"
 // @Router /role/user/remove [post]
 func roleUserRemove(ctx *gin.Context) {
 	var input roleUserRemoveInput
@@ -78,8 +76,7 @@ func roleUserRemove(ctx *gin.Context) {
 		return
 	}
 
-	// Step 5: Get all users assigned to this role (no need to validate the role existence again)
-	assignedUsers, err := casbin.GetRoleUsers(ctx, input.RoleCode)
+	assignedUsers, err := casbin.GetUsersForRole(ctx, input.RoleCode)
 	if err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
@@ -99,15 +96,10 @@ func roleUserRemove(ctx *gin.Context) {
 		return
 	}
 
-	// Step 7: Remove the users from the role
-	removedCount, err := casbin.RemoveUsersFromRole(ctx, input.RoleCode, input.UserCodes)
-	if err != nil {
+	if err := casbin.RemoveUsersFromRole(ctx, input.RoleCode, input.UserCodes); err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 
-	// Return the count of removed users
-	controller.Success(ctx, roleUserRemoveOutput{
-		RemovedCount: removedCount,
-	})
+	controller.Success(ctx, roleUserRemoveOutput{})
 }

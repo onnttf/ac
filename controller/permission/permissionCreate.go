@@ -16,12 +16,12 @@ import (
 )
 
 type permissionCreateInput struct {
-	UserCode   string    `json:"user_code" binding:"omitempty,len=36"` // user unique code
-	RoleCode   string    `json:"role_code" binding:"omitempty,len=36"` // role unique code
-	ObjectCode string    `json:"object_code" binding:"required"`       // resource code
-	Action     string    `json:"action" binding:"required"`            // operation type
-	BeginTime  time.Time `json:"begin_time" binding:"required"`        // start time
-	EndTime    time.Time `json:"end_time" binding:"required"`          // end time
+	UserCode   string    `json:"user_code" binding:"omitempty,len=36"`
+	RoleCode   string    `json:"role_code" binding:"omitempty,len=36"`
+	ObjectCode string    `json:"object_code" binding:"required"`
+	Action     string    `json:"action" binding:"required"`
+	BeginTime  time.Time `json:"begin_time" binding:"required"`
+	EndTime    time.Time `json:"end_time" binding:"required"`
 }
 
 type permissionCreateOutput struct {
@@ -36,7 +36,7 @@ var (
 // @Summary Create a new permission
 // @Tags permission
 // @Param input body permissionCreateInput true "input"
-// @Response 200 {object} controller.Response{data=permissionCreateOutput} "output"
+// @Success 200 {object} controller.Response{data=permissionCreateOutput} "output"
 // @Router /permission/create [post]
 func permissionCreate(ctx *gin.Context) {
 	var input permissionCreateInput
@@ -120,22 +120,36 @@ func permissionCreate(ctx *gin.Context) {
 		return
 	}
 
-	// add casbin policy with the updated subjectCode and objectCode
-	err = casbin.AddPolicy(ctx, subjectCode, objectCode, input.Action, input.BeginTime, input.EndTime)
-	if err != nil {
-		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
-		return
+	if input.UserCode != "" {
+		if err := casbin.AssignPoliciesToUser(ctx, input.UserCode, []casbin.Policy{{Object: objectCode, Action: input.Action, BeginTime: input.BeginTime, EndTime: input.EndTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithError(err))
+			return
+		}
+	} else {
+		if err := casbin.AssignPoliciesToRole(ctx, input.RoleCode, []casbin.Policy{{Object: objectCode, Action: input.Action, BeginTime: input.BeginTime, EndTime: input.EndTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithError(err))
+			return
+		}
 	}
 
-	// retrieve the created policy record
 	ruleRepo := dal.NewRepo[model.TblCasbinRule]()
+	subjectPrefixed := subjectCode
+	if input.UserCode != "" {
+		subjectPrefixed = casbin.PrefixUser + subjectCode
+	} else {
+		subjectPrefixed = casbin.PrefixRole + subjectCode
+	}
 	rule, err := ruleRepo.QueryOne(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 		return db.Where("ptype = ? AND v0 = ? AND v1 = ? AND v2 = ? AND v3 = ? AND v4 = ?",
-			"p", subjectCode, objectCode, input.Action,
+			"p", subjectPrefixed, objectCode, input.Action,
 			input.BeginTime.Format(time.RFC3339), input.EndTime.Format(time.RFC3339))
 	})
 	if err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
+		return
+	}
+	if rule == nil {
+		controller.Failure(ctx, controller.ErrSystemError.WithHint("created policy not found"))
 		return
 	}
 

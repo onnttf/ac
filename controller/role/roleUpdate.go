@@ -22,7 +22,7 @@ type roleUpdateOutput struct{}
 // @Summary Update an existing role
 // @Tags role
 // @Param input body roleUpdateInput true "input"
-// @Response 200 {object} controller.Response{data=roleUpdateOutput} "output"
+// @Success 200 {object} controller.Response{data=roleUpdateOutput} "output"
 // @Router /role/update [post]
 func roleUpdate(ctx *gin.Context) {
 	var input roleUpdateInput

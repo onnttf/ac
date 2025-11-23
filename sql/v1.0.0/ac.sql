@@ -12,7 +12,8 @@ CREATE TABLE `tbl_user` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_code` (`code`),
     UNIQUE KEY `uk_user_email` (`email`),
-    KEY `idx_user_name` (`name`)
+    KEY `idx_user_name` (`name`),
+    KEY `idx_user_status_deleted` (`status`, `deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='tbl_user';
 
 DROP TABLE IF EXISTS `tbl_menu`;
@@ -30,7 +31,8 @@ CREATE TABLE `tbl_menu` (
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'updated_at',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_menu_code` (`code`),
-    KEY `idx_menu_parent_sort_deleted` (`parent_code`, `sort`, `deleted`)
+    KEY `idx_menu_parent_sort_deleted` (`parent_code`, `sort`, `deleted`),
+    KEY `idx_menu_status_deleted_visible` (`status`, `deleted`, `visible`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='tbl_menu';
 
 DROP TABLE IF EXISTS `tbl_role`;
@@ -47,20 +49,21 @@ CREATE TABLE `tbl_role` (
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'updated_at',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_role_code` (`code`),
-    KEY `idx_role_parent_sort_deleted` (`parent_code`, `sort`, `deleted`)
+    KEY `idx_role_parent_sort_deleted` (`parent_code`, `sort`, `deleted`),
+    KEY `idx_role_status_deleted` (`status`, `deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='tbl_role';
 
-DROP TABLE IF EXISTS `tbl_casbin_rule`;
-CREATE TABLE `tbl_casbin_rule` (
+DROP TABLE IF EXISTS `casbin_rule`;
+CREATE TABLE `casbin_rule` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'id',
     `ptype` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'ptype',
-    `v0` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'v0',
-    `v1` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'v1',
-    `v2` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'v2',
-    `v3` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'v3',
-    `v4` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'v4',
-    `v5` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'v5',
+    `v0` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'v0',
+    `v1` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'v1',
+    `v2` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'v2',
+    `v3` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'v3',
+    `v4` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'v4',
+    `v5` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'v5',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_casbin_policy` (`ptype`, `v0`, `v1`, `v2`, `v3`, `v4`, `v5`),
-    KEY `idx_casbin_core` (`ptype`, `v0`, `v1`, `v2`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='tbl_casbin_rule';
+    KEY `idx_casbin_group` (`ptype`, `v1`, `v0`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='casbin_rule';

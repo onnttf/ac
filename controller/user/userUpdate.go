@@ -23,7 +23,7 @@ type userUpdateOutput struct{}
 // @Summary Update an existing user
 // @Tags user
 // @Param input body userUpdateInput true "input"
-// @Response 200 {object} controller.Response{data=userUpdateOutput} "output"
+// @Success 200 {object} controller.Response{data=userUpdateOutput} "output"
 // @Router /user/update [post]
 func userUpdate(ctx *gin.Context) {
 	var input userUpdateInput

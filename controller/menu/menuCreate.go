@@ -28,7 +28,7 @@ type menuCreateOutput struct {
 // @Summary Create a new menu
 // @Tags menu
 // @Param input body menuCreateInput true "input"
-// @Response 200 {object} controller.Response{data=menuCreateOutput} "output"
+// @Success 200 {object} controller.Response{data=menuCreateOutput} "output"
 // @Router /menu/create [post]
 func menuCreate(ctx *gin.Context) {
 	var input menuCreateInput
@@ -93,6 +93,7 @@ func menuCreate(ctx *gin.Context) {
 	})
 }
 
+// validateUrl ensures the URL is unique across menus.
 func validateUrl(ctx *gin.Context, url string) error {
 	count, err := dal.NewRepo[model.TblMenu]().Count(ctx, database.DB, func(db *gorm.DB) *gorm.DB {
 		return db.Unscoped().Where(model.TblMenu{Url: url})

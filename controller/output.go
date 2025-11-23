@@ -20,6 +20,7 @@ type Response struct {
 	Err       string `json:"err,omitempty"`
 }
 
+// Success returns a standard success response with optional data.
 func Success(ctx *gin.Context, data any) {
 	if data == nil {
 		data = struct{}{}
@@ -33,6 +34,7 @@ func Success(ctx *gin.Context, data any) {
 	})
 }
 
+// Failure maps an error to a standard response with code and message.
 func Failure(ctx *gin.Context, err error) {
 	response := Response{
 		Code:      ErrSystemError.Code,

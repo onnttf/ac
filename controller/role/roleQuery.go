@@ -25,7 +25,7 @@ type roleQueryOutput struct {
 // @Summary Query roles by fields
 // @Tags role
 // @Param input query roleQueryInput false "input"
-// @Response 200 {object} controller.Response{data=roleQueryOutput} "output"
+// @Success 200 {object} controller.Response{data=roleQueryOutput} "output"
 // @Router /role/query [get]
 func roleQuery(ctx *gin.Context) {
 	var input roleQueryInput

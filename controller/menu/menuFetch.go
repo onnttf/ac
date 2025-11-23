@@ -23,7 +23,7 @@ type menuFetchOutput struct {
 // @Summary Fetch a menu by code
 // @Tags menu
 // @Param input query menuFetchInput true "input"
-// @Response 200 {object} controller.Response{data=menuFetchOutput} "output"
+// @Success 200 {object} controller.Response{data=menuFetchOutput} "output"
 // @Router /menu/fetch [get]
 func menuFetch(ctx *gin.Context) {
 	var input menuFetchInput

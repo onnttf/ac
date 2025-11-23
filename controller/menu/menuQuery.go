@@ -27,7 +27,7 @@ type menuQueryOutput struct {
 // @Summary Query menus by fields
 // @Tags menu
 // @Param input query menuQueryInput false "input"
-// @Response 200 {object} controller.Response{data=menuQueryOutput} "output"
+// @Success 200 {object} controller.Response{data=menuQueryOutput} "output"
 // @Router /menu/query [get]
 func menuQuery(ctx *gin.Context) {
 	var input menuQueryInput

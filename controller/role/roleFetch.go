@@ -22,7 +22,7 @@ type roleFetchOutput struct {
 // @Summary Fetch a role by code
 // @Tags role
 // @Param input query roleFetchInput true "input"
-// @Response 200 {object} controller.Response{data=roleFetchOutput} "output"
+// @Success 200 {object} controller.Response{data=roleFetchOutput} "output"
 // @Router /role/fetch [get]
 func roleFetch(ctx *gin.Context) {
 	var input roleFetchInput

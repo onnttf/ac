@@ -32,7 +32,7 @@ type permissionQueryOutput struct {
 // @Summary Query policies by fields
 // @Tags permission
 // @Param input query permissionQueryInput false "input"
-// @Response 200 {object} controller.Response{data=permissionQueryOutput} "output"
+// @Success 200 {object} controller.Response{data=permissionQueryOutput} "output"
 // @Router /permission/query [get]
 func permissionQuery(ctx *gin.Context) {
 	var input permissionQueryInput

@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// RegisterRoutes registers role-related routes.
 func RegisterRoutes(api *gin.RouterGroup) {
 	router := api.Group("/role")
 

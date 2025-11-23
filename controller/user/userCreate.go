@@ -18,7 +18,7 @@ import (
 type userCreateInput struct {
 	Name     string `json:"name" binding:"required,min=6,max=50" example:"Alice"`
 	Email    string `json:"email" binding:"required,email" example:"alice@example.com"`
-	Password string `json:"password" binding:"required,min=6,max=8" example:"123456"`
+	Password string `json:"password" binding:"required,min=8,max=64" example:"12345678"`
 }
 
 type userCreateOutput struct {
@@ -28,7 +28,7 @@ type userCreateOutput struct {
 // @Summary Create a new user
 // @Tags user
 // @Param input body userCreateInput true "input"
-// @Response 200 {object} controller.Response{data=userCreateOutput} "output"
+// @Success 200 {object} controller.Response{data=userCreateOutput} "output"
 // @Router /user/create [post]
 func userCreate(ctx *gin.Context) {
 	var input userCreateInput

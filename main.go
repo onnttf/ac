@@ -31,20 +31,18 @@ import (
 
 // @Title           Access Control
 // @Version         1.0
-// @Description     This is the API documentation for Access Control.
-
-// @Contact.Name   Zhang Peng
-// @Contact.Url    https://github.com/onnttf
-// @Contact.Email  onnttf@gmail.com
-
-// @License.Name  MIT
-// @License.Url   https://opensource.org/licenses/MIT
-
-// @Host      localhost:8082
-// @BasePath  /api
-// @Schemes   http https
-// @Accept    json
-// @Produce   json
+// @Description     API documentation for Access Control service.
+// @Contact.Name    Zhang Peng
+// @Contact.Url     https://github.com/onnttf
+// @Contact.Email   onnttf@gmail.com
+// @License.Name    MIT
+// @License.Url     https://opensource.org/licenses/MIT
+// @Host            localhost:8082
+// @BasePath        /api
+// @Schemes         http https
+// @Accept          json
+// @Produce         json
+// main initializes dependencies, configures routes, and runs the HTTP server.
 func main() {
 	if err := bootstrap.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: main: failed to initialize application, error=%v\n", err)

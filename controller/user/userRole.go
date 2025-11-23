@@ -23,7 +23,7 @@ type userRoleOutput struct {
 // @Summary Query roles assigned to a user
 // @Tags user
 // @Param input query userRoleInput true "input"
-// @Response 200 {object} controller.Response{data=userRoleOutput} "output"
+// @Success 200 {object} controller.Response{data=userRoleOutput} "output"
 // @Router /user/role [get]
 func userRole(ctx *gin.Context) {
 	var input userRoleInput
@@ -46,8 +46,7 @@ func userRole(ctx *gin.Context) {
 		return
 	}
 
-	// Retrieve roles assigned to the user
-	roleCodes, err := casbin.GetUserRoles(ctx, input.UserCode)
+	roleCodes, err := casbin.GetRolesForUser(ctx, input.UserCode)
 	if err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return

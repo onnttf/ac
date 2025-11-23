@@ -27,7 +27,7 @@ type roleListRecord struct {
 // @Summary List roles with pagination
 // @Tags role
 // @Param input query roleListInput true "input"
-// @Response 200 {object} controller.Response{data=roleListOutput} "output"
+// @Success 200 {object} controller.Response{data=roleListOutput} "output"
 // @Router /role/list [get]
 func roleList(ctx *gin.Context) {
 	data := map[string]any{}

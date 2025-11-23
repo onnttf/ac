@@ -19,14 +19,12 @@ type userRoleAssignInput struct {
 	RoleCodes []string `json:"role_codes" binding:"required,min=1,dive,len=36"`
 }
 
-type userRoleAssignOutput struct {
-	AssignedCount int `json:"assigned_count"`
-}
+type userRoleAssignOutput struct{}
 
 // @Summary Assign roles to a user
 // @Tags user
 // @Param input body userRoleAssignInput true "input"
-// @Response 200 {object} controller.Response{data=userRoleAssignOutput} "output"
+// @Success 200 {object} controller.Response{data=userRoleAssignOutput} "output"
 // @Router /user/role/assign [post]
 func userRoleAssign(ctx *gin.Context) {
 	var input userRoleAssignInput
@@ -50,7 +48,7 @@ func userRoleAssign(ctx *gin.Context) {
 	}
 
 	// 2. Check if user already has the roles
-	userRoles, err := casbin.GetUserRoles(ctx, input.UserCode)
+	userRoles, err := casbin.GetRolesForUser(ctx, input.UserCode)
 	if err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
@@ -94,12 +92,10 @@ func userRoleAssign(ctx *gin.Context) {
 	}
 
 	// 4. Assign roles to the user
-	assignedCount, err := casbin.AssignRolesToUser(ctx, input.UserCode, input.RoleCodes)
-	if err != nil {
+	if err := casbin.AssignRolesToUser(ctx, input.UserCode, input.RoleCodes); err != nil {
 		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
 		return
 	}
 
-	// Return success response with count of assigned roles
-	controller.Success(ctx, userRoleAssignOutput{AssignedCount: assignedCount})
+	controller.Success(ctx, userRoleAssignOutput{})
 }

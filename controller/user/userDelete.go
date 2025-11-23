@@ -22,7 +22,7 @@ type userDeleteOutput struct{}
 // @Summary Delete an existing user
 // @Tags user
 // @Param input body userDeleteInput true "input"
-// @Response 200 {object} controller.Response{data=userDeleteOutput} "output"
+// @Success 200 {object} controller.Response{data=userDeleteOutput} "output"
 // @Router /user/delete [post]
 func userDelete(ctx *gin.Context) {
 	var input userDeleteInput

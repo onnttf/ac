@@ -22,7 +22,7 @@ type menuDeleteOutput struct{}
 // @Summary Delete an existing menu
 // @Tags menu
 // @Param input body menuDeleteInput true "input"
-// @Response 200 {object} controller.Response{data=menuDeleteOutput} "output"
+// @Success 200 {object} controller.Response{data=menuDeleteOutput} "output"
 // @Router /menu/delete [post]
 func menuDelete(ctx *gin.Context) {
 	var input menuDeleteInput

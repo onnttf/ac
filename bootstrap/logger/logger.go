@@ -24,11 +24,11 @@ var (
 	initErr       error
 )
 
+// InitLogger sets up a structured Zap logger with console and file outputs.
 func InitLogger(config Config) error {
 	once.Do(func() {
 		fmt.Fprintf(os.Stdout, "INFO: logger: init: started\n")
 
-		// Get working directory
 		workingDir, err := os.Getwd()
 		if err != nil {
 			initErr = fmt.Errorf("failed to get working directory for logger: %w", err)
@@ -36,9 +36,8 @@ func InitLogger(config Config) error {
 			return
 		}
 
-		// Create log directory
 		logDirectory := filepath.Join(workingDir, config.Directory)
-		if err := os.MkdirAll(logDirectory, 0o744); err != nil {
+		if err := os.MkdirAll(logDirectory, 0o755); err != nil {
 			initErr = fmt.Errorf("failed to create log directory '%s': %w", logDirectory, err)
 			fmt.Fprintf(os.Stderr, "ERROR: logger: init: failed, reason=create log dir, path=%s, error=%v\n", logDirectory, initErr)
 			return
@@ -134,6 +133,7 @@ func InitLogger(config Config) error {
 	return initErr
 }
 
+// LogWith writes a log entry with the given level, message, and key-values.
 func LogWith(ctx context.Context, level zapcore.Level, msg string, kv map[string]any) {
 	baseKV := getBaseKV(ctx)
 	for k, v := range kv {
@@ -174,6 +174,7 @@ func LogWith(ctx context.Context, level zapcore.Level, msg string, kv map[string
 	}
 }
 
+// getBaseKV constructs default logging fields from the context.
 func getBaseKV(ctx context.Context) map[string]any {
 	kv := make(map[string]any)
 	if ctx == nil {
@@ -188,18 +189,22 @@ func getBaseKV(ctx context.Context) map[string]any {
 	return kv
 }
 
+// Debugf logs a formatted message at debug level.
 func Debugf(ctx context.Context, format string, args ...any) {
 	LogWith(ctx, zapcore.DebugLevel, fmt.Sprintf(format, args...), nil)
 }
 
+// Infof logs a formatted message at info level.
 func Infof(ctx context.Context, format string, args ...any) {
 	LogWith(ctx, zapcore.InfoLevel, fmt.Sprintf(format, args...), nil)
 }
 
+// Warnf logs a formatted message at warn level.
 func Warnf(ctx context.Context, format string, args ...any) {
 	LogWith(ctx, zapcore.WarnLevel, fmt.Sprintf(format, args...), nil)
 }
 
+// Errorf logs a formatted message at error level.
 func Errorf(ctx context.Context, format string, args ...any) {
 	LogWith(ctx, zapcore.ErrorLevel, fmt.Sprintf(format, args...), nil)
 }

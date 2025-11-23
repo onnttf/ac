@@ -1,6 +1,7 @@
 package permission
 
 import (
+	"strings"
 	"time"
 
 	"ac/bootstrap/database"
@@ -22,7 +23,7 @@ type permissionDeleteOutput struct{}
 // @Summary Delete an existing permission
 // @Tags permission
 // @Param input body permissionDeleteInput true "input"
-// @Response 200 {object} controller.Response{data=permissionDeleteOutput} "output"
+// @Success 200 {object} controller.Response{data=permissionDeleteOutput} "output"
 // @Router /permission/delete [post]
 func permissionDelete(ctx *gin.Context) {
 	var input permissionDeleteInput
@@ -53,10 +54,20 @@ func permissionDelete(ctx *gin.Context) {
 		return
 	}
 
-	// Remove permission from Casbin
-	err = casbin.RemovePolicy(ctx, rule.V0, rule.V1, rule.V2, beginTime, endTime)
-	if err != nil {
-		controller.Failure(ctx, controller.ErrSystemError.WithError(err))
+	if strings.HasPrefix(rule.V0, casbin.PrefixUser) {
+		userCode := strings.TrimPrefix(rule.V0, casbin.PrefixUser)
+		if err := casbin.RemovePoliciesFromUser(ctx, userCode, []casbin.Policy{{Object: rule.V1, Action: rule.V2, BeginTime: beginTime, EndTime: endTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithError(err))
+			return
+		}
+	} else if strings.HasPrefix(rule.V0, casbin.PrefixRole) {
+		roleCode := strings.TrimPrefix(rule.V0, casbin.PrefixRole)
+		if err := casbin.RemovePoliciesFromRole(ctx, roleCode, []casbin.Policy{{Object: rule.V1, Action: rule.V2, BeginTime: beginTime, EndTime: endTime}}); err != nil {
+			controller.Failure(ctx, controller.ErrSystemError.WithError(err))
+			return
+		}
+	} else {
+		controller.Failure(ctx, controller.ErrSystemError.WithHint("unknown subject prefix in rule"))
 		return
 	}
 

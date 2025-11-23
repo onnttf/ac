@@ -7,10 +7,12 @@ type Error struct {
 	Cause error  `json:"-"`
 }
 
+// Error implements the error interface.
 func (e *Error) Error() string {
 	return e.Msg
 }
 
+// NewError creates a new Error with code, message and hint.
 func NewError(code int, msg, hint string) *Error {
 	return &Error{
 		Code: code,
@@ -19,6 +21,7 @@ func NewError(code int, msg, hint string) *Error {
 	}
 }
 
+// Withmsg returns a copy with a new message.
 func (e *Error) Withmsg(newmsg string) *Error {
 	if e == nil {
 		return nil
@@ -26,6 +29,7 @@ func (e *Error) Withmsg(newmsg string) *Error {
 	return e.WithmsgAndHint(newmsg, e.Hint)
 }
 
+// WithHint returns a copy with a new hint.
 func (e *Error) WithHint(newHint string) *Error {
 	if e == nil {
 		return nil
@@ -33,6 +37,7 @@ func (e *Error) WithHint(newHint string) *Error {
 	return e.WithmsgAndHint(e.Msg, newHint)
 }
 
+// WithmsgAndHint returns a copy with both message and hint updated.
 func (e *Error) WithmsgAndHint(newmsg, newHint string) *Error {
 	if e == nil {
 		return nil
@@ -48,6 +53,7 @@ func (e *Error) WithmsgAndHint(newmsg, newHint string) *Error {
 	}
 }
 
+// WithError attaches an underlying cause error.
 func (e *Error) WithError(cause error) *Error {
 	if e == nil {
 		return nil

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"ac/bootstrap/config"
 	"ac/bootstrap/logger"
@@ -19,17 +20,18 @@ var (
 	initErr error
 )
 
+// InitMySQL initializes a global Gorm MySQL connection and verifies connectivity.
 func InitMySQL() error {
 	once.Do(func() {
 		fmt.Fprintf(os.Stdout, "INFO: database: init: started\n")
 
 		dsn := fmt.Sprintf(
 			"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=UTC",
-			config.Config.Database.User,
-			config.Config.Database.Password,
-			config.Config.Database.Host,
-			config.Config.Database.Port,
-			config.Config.Database.Database,
+			config.Config().Database.User,
+			config.Config().Database.Password,
+			config.Config().Database.Host,
+			config.Config().Database.Port,
+			config.Config().Database.Database,
 		)
 
 		db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
@@ -48,9 +50,18 @@ func InitMySQL() error {
 			return
 		}
 
-		if err := sqlDB.Ping(); err != nil {
-			initErr = fmt.Errorf("ping to MySQL failed: %w", err)
-			fmt.Fprintf(os.Stderr, "ERROR: database: ping: failed, reason=ping, error=%v\n", err)
+		var pingErr error
+		for i := 0; i < 3; i++ {
+			pingErr = sqlDB.Ping()
+			if pingErr == nil {
+				break
+			}
+			fmt.Fprintf(os.Stderr, "WARN: database: ping: retry=%d, error=%v\n", i+1, pingErr)
+			time.Sleep([]time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second}[i])
+		}
+		if pingErr != nil {
+			initErr = fmt.Errorf("ping to MySQL failed: %w", pingErr)
+			fmt.Fprintf(os.Stderr, "ERROR: database: ping: failed, reason=ping, error=%v\n", pingErr)
 			return
 		}
 
@@ -58,28 +69,10 @@ func InitMySQL() error {
 		fmt.Fprintf(
 			os.Stdout,
 			"INFO: database: init: succeeded, host=%s, port=%s, db=%s\n",
-			config.Config.Database.Host,
-			config.Config.Database.Port,
-			config.Config.Database.Database,
+			config.Config().Database.Host,
+			config.Config().Database.Port,
+			config.Config().Database.Database,
 		)
-
-		// g := gen.NewGenerator(gen.Config{
-		// 	ModelPkgPath:      "./model",
-		// 	FieldWithIndexTag: true,
-		// 	FieldWithTypeTag:  true,
-		// })
-		// var dataMap = map[string]func(gorm.ColumnType) (dataType string){
-		// 	"int": func(columnType gorm.ColumnType) (dataType string) {
-		// 		return "int64"
-		// 	},
-		// 	"tinyint": func(columnType gorm.ColumnType) (dataType string) {
-		// 		return "int64"
-		// 	},
-		// }
-		// g.WithDataTypeMap(dataMap)
-		// g.UseDB(DB)
-		// g.GenerateAllTable()
-		// g.Execute()
 	})
 
 	return initErr

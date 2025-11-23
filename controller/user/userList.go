@@ -29,7 +29,7 @@ type userListRecord struct {
 // @Summary List users with pagination
 // @Tags user
 // @Param input query userListInput true "input"
-// @Response 200 {object} controller.Response{data=userListOutput} "output"
+// @Success 200 {object} controller.Response{data=userListOutput} "output"
 // @Router /user/list [get]
 func userList(ctx *gin.Context) {
 	var input userListInput

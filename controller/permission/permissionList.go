@@ -34,7 +34,7 @@ type permissionListRecord struct {
 // @Summary List policies with pagination
 // @Tags permission
 // @Param input query permissionListInput true "input"
-// @Response 200 {object} controller.Response{data=permissionListOutput} "output"
+// @Success 200 {object} controller.Response{data=permissionListOutput} "output"
 // @Router /permission/list [get]
 func permissionList(ctx *gin.Context) {
 	var input permissionListInput

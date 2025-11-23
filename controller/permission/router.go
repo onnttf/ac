@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// RegisterRoutes registers permission-related routes.
 func RegisterRoutes(api *gin.RouterGroup) {
 	router := api.Group("/permission")
 

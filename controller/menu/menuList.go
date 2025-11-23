@@ -31,7 +31,7 @@ type menuListRecord struct {
 // @Summary List menus with pagination
 // @Tags menu
 // @Param input query menuListInput true "input"
-// @Response 200 {object} controller.Response{data=menuListOutput} "output"
+// @Success 200 {object} controller.Response{data=menuListOutput} "output"
 // @Router /menu/list [get]
 func menuList(ctx *gin.Context) {
 	var input menuListInput
