@@ -9,65 +9,82 @@ import (
 	"time"
 
 	"ac/bootstrap/database"
+	"ac/bootstrap/logger"
+	"ac/model"
 
 	casbin "github.com/casbin/casbin/v2"
 	casbinModel "github.com/casbin/casbin/v2/model"
-	gormadapter "github.com/casbin/gorm-adapter/v3"
+	gormAdapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/gin-gonic/gin"
 )
 
-// enforcer is the global TransactionalEnforcer instance guarded by once.
+// Global enforcer with thread-safe initialization
 var (
 	enforcer *casbin.TransactionalEnforcer
-	once     sync.Once
+	initOnce sync.Once
 	initErr  error
 )
 
+// Casbin grouping policy identifiers
 const (
-	GTypeUserRole    = "g"
-	GTypeObjectGroup = "g2"
-
-	UserCode = "user"
-	RoleCode = "role"
-	MenuCode = "menu"
-
-	PrefixUser = "u:"
-	PrefixRole = "r:"
-	PrefixMenu = "o:"
+	GroupingUserRole    = "g"  // User-to-Role inheritance
+	GroupingObjectGroup = "g2" // Object-to-Group hierarchy
 )
 
-// Package-level error values for consistent error handling.
+// Entity type identifiers for validation
+const (
+	EntityUser   = "user"
+	EntityRole   = "role"
+	EntityObject = "object"
+)
+
+// Entity prefixes for Casbin policy identification
+const (
+	PrefixUser   = "u"
+	PrefixRole   = "r"
+	PrefixObject = "o"
+
+	PrefixSeparator = ":"
+)
+
+// Domain-specific errors for policy and role management
 var (
-	ErrEnforcerNotInit     = fmt.Errorf("casbin enforcer not initialized")
-	ErrPolicyExists        = fmt.Errorf("policy already exists")
-	ErrPolicyNotExist      = fmt.Errorf("policy does not exist")
-	ErrGroupingExists      = fmt.Errorf("grouping policy already exists")
-	ErrGroupingNotExist    = fmt.Errorf("grouping policy does not exist")
-	ErrRoleAlreadyAssigned = fmt.Errorf("role already assigned to user")
-	ErrRoleNotAssigned     = fmt.Errorf("role not assigned to user")
-	ErrUserAlreadyAssigned = fmt.Errorf("user already assigned to role")
-	ErrUserNotAssigned     = fmt.Errorf("user not assigned to role")
-	ErrPolicyTimeOverlap   = fmt.Errorf("policy time window overlaps")
-	ErrInvalidTimeRange    = fmt.Errorf("invalid time range")
-	ErrInvalidPolicyFields = fmt.Errorf("invalid policy fields")
-	ErrInvalidUserCode     = fmt.Errorf("invalid user code")
-	ErrInvalidRoleCode     = fmt.Errorf("invalid role code")
-	ErrInvalidGroupCode    = fmt.Errorf("invalid group code")
-	ErrInvalidObjectCode   = fmt.Errorf("invalid object code")
+	ErrEnforcerNotInitialized = fmt.Errorf("casbin enforcer not initialized")
+	ErrPolicyAlreadyExists    = fmt.Errorf("policy already exists")
+	ErrPolicyNotFound         = fmt.Errorf("policy not found")
+	ErrGroupingAlreadyExists  = fmt.Errorf("grouping already exists")
+	ErrGroupingNotFound       = fmt.Errorf("grouping not found")
+	ErrRoleAlreadyAssigned    = fmt.Errorf("role already assigned to user")
+	ErrRoleNotAssigned        = fmt.Errorf("role not assigned to user")
+	ErrUserAlreadyAssigned    = fmt.Errorf("user already assigned to role")
+	ErrUserNotAssigned        = fmt.Errorf("user not assigned to role")
+	ErrInvalidTimeRange       = fmt.Errorf("end time must be after begin time")
+	ErrInvalidPolicyFields    = fmt.Errorf("object and action are required")
+	ErrInvalidUserCode        = fmt.Errorf("user code cannot be empty")
+	ErrInvalidRoleCode        = fmt.Errorf("role code cannot be empty")
+	ErrInvalidGroupCode       = fmt.Errorf("group code cannot be empty")
+	ErrInvalidObjectCode      = fmt.Errorf("object code cannot be empty")
 )
 
-// Initialize prepares the global Casbin TransactionalEnforcer.
-// It loads the model, sets up the Gorm adapter, and creates the enforcer.
+// Initialize creates the Casbin enforcer with RBAC model and GORM adapter.
+// Thread-safe - can be called multiple times without side effects.
 func Initialize() error {
-	once.Do(func() {
+	initOnce.Do(func() {
 		fmt.Fprintf(os.Stdout, "INFO: casbin: init: started\n")
-		gormadapter.TurnOffAutoMigrate(database.DB)
-		adapter, err := gormadapter.NewTransactionalAdapterByDB(database.DB)
+
+		gormAdapter.TurnOffAutoMigrate(database.DB)
+
+		adapter, err := gormAdapter.NewAdapterByDBWithCustomTable(
+			database.DB,
+			&model.TblCasbinRule{},
+			model.TableNameTblCasbinRule,
+		)
 		if err != nil {
 			initErr = fmt.Errorf("failed to create Gorm Adapter: %w", err)
 			fmt.Fprintf(os.Stderr, "ERROR: casbin: init: create adapter failed: %v\n", err)
 			return
 		}
+
 		m, err := casbinModel.NewModelFromString(`
 [request_definition]
 r = sub, obj, act, time
@@ -76,8 +93,8 @@ r = sub, obj, act, time
 p = sub, obj, act, begin_time, end_time
 
 [role_definition]
-g = _, _ // User-Role grouping
-g2 = _, _ // Object-Group grouping
+g = _, _ 
+g2 = _, _ 
 
 [policy_effect]
 e = some(where (p.eft == allow))
@@ -90,874 +107,929 @@ m = g(r.sub, p.sub) && g2(r.obj, p.obj) && r.act == p.act && r.time >= p.begin_t
 			fmt.Fprintf(os.Stderr, "ERROR: casbin: init: load model failed: %v\n", err)
 			return
 		}
+
 		enforcer, err = casbin.NewTransactionalEnforcer(m, adapter)
 		if err != nil {
 			initErr = fmt.Errorf("failed to create Casbin enforcer: %w", err)
 			fmt.Fprintf(os.Stderr, "ERROR: casbin: init: create enforcer failed: %v\n", err)
 			return
 		}
-		fmt.Fprintf(os.Stdout, "INFO: casbin: init: succeeded, model=memory, policy_table=casbin_rule\n")
+
+		fmt.Fprintf(os.Stdout, "INFO: casbin: init: succeeded, model=memory, policy_table=tbl_casbin_rule\n")
 	})
 	return initErr
 }
 
-// LoadPolicy reloads policies from persistent storage into the enforcer cache.
-func LoadPolicy(context *gin.Context) error {
+// LoadPolicy refreshes the in-memory policy cache from database.
+// Use after direct database modifications or cache inconsistencies.
+func LoadPolicy(ctx *gin.Context) error {
 	if enforcer == nil {
-		return ErrEnforcerNotInit
+		logger.Errorf(ctx, "casbin: load policy failed: enforcer not initialized")
+		return ErrEnforcerNotInitialized
 	}
 
+	logger.Infof(ctx, "casbin: loading policies from database")
 	if err := enforcer.LoadPolicy(); err != nil {
-		return fmt.Errorf("load_policy: %w", err)
+		logger.Errorf(ctx, "casbin: load policy failed: error=%v", err)
+		return fmt.Errorf("failed to load policies: %w", err)
 	}
+	logger.Infof(ctx, "casbin: policies loaded successfully")
 	return nil
 }
 
-// Enforce evaluates whether a subject may perform an action on an object at a given time.
-func Enforce(context *gin.Context, subject, object, action string, currentTime time.Time) (bool, error) {
+// Enforce performs authorization check with time-based policy evaluation.
+// Returns true if access is granted, false if denied.
+func Enforce(ctx *gin.Context, subject, object, action string, currentTime time.Time) (bool, error) {
 	if enforcer == nil {
-		return false, ErrEnforcerNotInit
+		logger.Errorf(ctx, "casbin: enforce check failed: enforcer not initialized")
+		return false, ErrEnforcerNotInitialized
 	}
-	ok, err := enforcer.Enforce(subject, object, action, formatTime(currentTime))
+
+	timeStr := formatTime(currentTime)
+	logger.Debugf(ctx, "casbin: enforce check: subject=%s, object=%s, action=%s, time=%s", subject, object, action, timeStr)
+	allowed, err := enforcer.Enforce(subject, object, action, timeStr)
 	if err != nil {
-		return false, fmt.Errorf("enforce subject=%s object=%s action=%s time=%s: %w", subject, object, action, formatTime(currentTime), err)
+		logger.Errorf(ctx, "casbin: enforce check failed: subject=%s, object=%s, action=%s, time=%s, error=%v", subject, object, action, timeStr, err)
+		return false, fmt.Errorf("enforce check failed (subject=%s, object=%s, action=%s, time=%s): %w",
+			subject, object, action, timeStr, err)
 	}
-	return ok, nil
+	logger.Debugf(ctx, "casbin: enforce result: allowed=%v, subject=%s, object=%s, action=%s", allowed, subject, object, action)
+	return allowed, nil
 }
 
-// formatTime converts a time to an RFC3339 UTC string.
+// formatTime standardizes time format for Casbin policy evaluation.
 func formatTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
-// timeOverlap reports whether two time windows overlap.
-func timeOverlap(b1, e1, b2, e2 time.Time) bool {
-	if b1.After(e1) || b2.After(e2) {
-		return false
-	}
-	return !(b1.After(e2) || b2.After(e1))
-}
-
-// addPrefix attaches a type prefix to a code.
-func addPrefix(code, codeType string) string {
-	switch codeType {
-	case UserCode:
-		return PrefixUser + code
-	case RoleCode:
-		return PrefixRole + code
-	case MenuCode:
-		return PrefixMenu + code
+// addPrefix creates Casbin-compatible entity identifiers.
+func addPrefix(code, entityType string) string {
+	switch entityType {
+	case EntityUser:
+		return PrefixUser + PrefixSeparator + code
+	case EntityRole:
+		return PrefixRole + PrefixSeparator + code
+	case EntityObject:
+		return PrefixObject + PrefixSeparator + code
 	default:
 		return code
 	}
 }
 
-// removePrefix strips a type prefix from a code.
-func removePrefix(code, codeType string) string {
-	switch codeType {
-	case UserCode:
-		return strings.TrimPrefix(code, PrefixUser)
-	case RoleCode:
-		return strings.TrimPrefix(code, PrefixRole)
-	case MenuCode:
-		return strings.TrimPrefix(code, PrefixMenu)
+// removePrefix extracts raw entity codes from Casbin identifiers.
+func removePrefix(code, entityType string) string {
+	switch entityType {
+	case EntityUser:
+		return strings.TrimPrefix(code, PrefixUser+PrefixSeparator)
+	case EntityRole:
+		return strings.TrimPrefix(code, PrefixRole+PrefixSeparator)
+	case EntityObject:
+		return strings.TrimPrefix(code, PrefixObject+PrefixSeparator)
 	default:
 		return code
 	}
 }
 
-// AssignRolesToUser assigns the given roles to a user in a single transaction.
-func AssignRolesToUser(context *gin.Context, userCode string, roleCodes []string) error {
-	if enforcer == nil {
-		return ErrEnforcerNotInit
-	}
-
-	userCode = strings.TrimSpace(userCode)
-	if userCode == "" {
-		return ErrInvalidUserCode
-	}
-	if len(roleCodes) == 0 {
-		return ErrInvalidRoleCode
-	}
-	for i := range roleCodes {
-		roleCodes[i] = strings.TrimSpace(roleCodes[i])
-		if roleCodes[i] == "" {
+// validateCode prevents empty entity identifiers in policy operations.
+func validateCode(code, entityType string) error {
+	if strings.TrimSpace(code) == "" {
+		switch entityType {
+		case EntityUser:
+			return ErrInvalidUserCode
+		case EntityRole:
 			return ErrInvalidRoleCode
+		case EntityObject:
+			return ErrInvalidObjectCode
+		default:
+			return fmt.Errorf("invalid entity type: %s", entityType)
+		}
+	}
+	return nil
+}
+
+// validateCodes validates entity code batches for bulk operations.
+func validateCodes(codes []string, entityType string) error {
+	if len(codes) == 0 {
+		switch entityType {
+		case EntityUser:
+			return ErrInvalidUserCode
+		case EntityRole:
+			return ErrInvalidRoleCode
+		case EntityObject:
+			return ErrInvalidObjectCode
+		default:
+			return fmt.Errorf("invalid entity type: %s", entityType)
 		}
 	}
 
-	userPrefixed := addPrefix(userCode, UserCode)
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeUserRole, 0, userPrefixed)
-	if err != nil {
+	for _, code := range codes {
+		if err := validateCode(code, entityType); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// buildPolicyKey generates composite keys for policy deduplication.
+func buildPolicyKey(object, action string) string {
+	return object + "|" + action
+}
+
+// assignPoliciesToSubject grants access policies to users or roles.
+// Performs duplicate detection and validates time ranges atomically.
+func assignPoliciesToSubject(ctx *gin.Context, subjectCode, subjectType string, policies []Policy) error {
+	if enforcer == nil {
+		logger.Errorf(ctx, "casbin: assign policies failed: enforcer not initialized")
+		return ErrEnforcerNotInitialized
+	}
+
+	if err := validateCode(subjectCode, subjectType); err != nil {
+		logger.Errorf(ctx, "casbin: assign policies validation failed: subject_type=%s, subject_code=%s, error=%v", subjectType, subjectCode, err)
 		return err
 	}
-	existing := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			existing[policyEntry[1]] = struct{}{}
-		}
+
+	if subjectType != EntityUser && subjectType != EntityRole {
+		logger.Errorf(ctx, "casbin: assign policies failed: invalid subject type=%s", subjectType)
+		return ErrInvalidPolicyFields
 	}
-	for _, role := range roleCodes {
-		rolePrefixed := addPrefix(role, RoleCode)
-		if _, ok := existing[rolePrefixed]; ok {
-			return fmt.Errorf("add_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, ErrRoleAlreadyAssigned)
+
+	subjectWithPrefix := addPrefix(subjectCode, subjectType)
+	logger.Infof(ctx, "casbin: assigning policies: subject_type=%s, subject=%s, policy_count=%d", subjectType, subjectWithPrefix, len(policies))
+
+	existingPolicies, err := enforcer.GetFilteredPolicy(0, subjectWithPrefix)
+	if err != nil {
+		logger.Errorf(ctx, "casbin: failed to get existing policies: subject=%s, error=%v", subjectWithPrefix, err)
+		return fmt.Errorf("failed to get existing policies for %s: %w", subjectWithPrefix, err)
+	}
+
+	// Build map of existing policies by object+action
+	existingPolicyMap := make(map[string]struct{})
+	for _, policyFields := range existingPolicies {
+		if len(policyFields) >= 3 {
+			key := buildPolicyKey(policyFields[1], policyFields[2])
+			existingPolicyMap[key] = struct{}{}
 		}
 	}
 
-	err = enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, role := range roleCodes {
-			rolePrefixed := addPrefix(role, RoleCode)
-			_, err := transaction.AddNamedGroupingPolicy(GTypeUserRole, userPrefixed, rolePrefixed)
+	// Validate all policies before adding any
+	for i := range policies {
+		policies[i].Object = strings.TrimSpace(policies[i].Object)
+		policies[i].Action = strings.TrimSpace(policies[i].Action)
+		policy := policies[i]
+
+		if err := policy.Validate(); err != nil {
+			logger.Errorf(ctx, "casbin: policy validation failed: subject=%s, object=%s, action=%s, begin=%s, end=%s, error=%v",
+				subjectWithPrefix, policy.Object, policy.Action,
+				formatTime(policy.BeginTime), formatTime(policy.EndTime), err)
+			return fmt.Errorf("invalid policy (subject=%s, object=%s, action=%s, begin=%s, end=%s): %w",
+				subjectWithPrefix, policy.Object, policy.Action,
+				formatTime(policy.BeginTime), formatTime(policy.EndTime), err)
+		}
+
+		key := buildPolicyKey(policy.Object, policy.Action)
+		if _, exists := existingPolicyMap[key]; exists {
+			logger.Warnf(ctx, "casbin: policy already exists: subject=%s, object=%s, action=%s", subjectWithPrefix, policy.Object, policy.Action)
+			return fmt.Errorf("policy already exists (subject=%s, object=%s, action=%s): %w",
+				subjectWithPrefix, policy.Object, policy.Action, ErrPolicyAlreadyExists)
+		}
+
+		// Prevent duplicates within same request
+		existingPolicyMap[key] = struct{}{}
+	}
+
+	// Add all policies in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, policy := range policies {
+			_, err := tx.AddPolicy(
+				subjectWithPrefix,
+				policy.Object,
+				policy.Action,
+				formatTime(policy.BeginTime),
+				formatTime(policy.EndTime),
+			)
 			if err != nil {
-				return fmt.Errorf("add_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, err)
+				logger.Errorf(ctx, "casbin: failed to add policy: subject=%s, object=%s, action=%s, error=%v",
+					subjectWithPrefix, policy.Object, policy.Action, err)
+				return fmt.Errorf("failed to add policy (subject=%s, object=%s, action=%s): %w",
+					subjectWithPrefix, policy.Object, policy.Action, err)
 			}
+			logger.Debugf(ctx, "casbin: policy added successfully: subject=%s, object=%s, action=%s, begin=%s, end=%s",
+				subjectWithPrefix, policy.Object, policy.Action,
+				formatTime(policy.BeginTime), formatTime(policy.EndTime))
 		}
+		logger.Infof(ctx, "casbin: policies assigned successfully: subject=%s, count=%d", subjectWithPrefix, len(policies))
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-// RemoveRolesFromUser removes the given roles from a user in a single transaction.
-func RemoveRolesFromUser(context *gin.Context, userCode string, roleCodes []string) error {
+// removePoliciesFromSubject revokes specific policies from users or roles.
+// Validates policy existence before removal to prevent silent failures.
+func removePoliciesFromSubject(ctx *gin.Context, subjectCode, subjectType string, policies []Policy) error {
 	if enforcer == nil {
-		return ErrEnforcerNotInit
+		logger.Errorf(ctx, "casbin: remove policies failed: enforcer not initialized")
+		return ErrEnforcerNotInitialized
 	}
 
-	userCode = strings.TrimSpace(userCode)
-	if userCode == "" {
-		return ErrInvalidUserCode
-	}
-	if len(roleCodes) == 0 {
-		return ErrInvalidRoleCode
-	}
-	for i := range roleCodes {
-		roleCodes[i] = strings.TrimSpace(roleCodes[i])
-		if roleCodes[i] == "" {
-			return ErrInvalidRoleCode
-		}
-	}
-
-	userPrefixed := addPrefix(userCode, UserCode)
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeUserRole, 0, userPrefixed)
-	if err != nil {
+	if err := validateCode(subjectCode, subjectType); err != nil {
+		logger.Errorf(ctx, "casbin: remove policies validation failed: subject_type=%s, subject_code=%s, error=%v", subjectType, subjectCode, err)
 		return err
 	}
-	existing := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			existing[policyEntry[1]] = struct{}{}
-		}
+
+	subjectWithPrefix := addPrefix(subjectCode, subjectType)
+	logger.Infof(ctx, "casbin: removing policies: subject_type=%s, subject=%s, policy_count=%d", subjectType, subjectWithPrefix, len(policies))
+
+	existingPolicies, err := enforcer.GetFilteredPolicy(0, subjectWithPrefix)
+	if err != nil {
+		logger.Errorf(ctx, "casbin: failed to get existing policies for removal: subject=%s, error=%v", subjectWithPrefix, err)
+		return fmt.Errorf("failed to get policies for %s: %w", subjectWithPrefix, err)
 	}
-	for _, role := range roleCodes {
-		rolePrefixed := addPrefix(role, RoleCode)
-		if _, ok := existing[rolePrefixed]; !ok {
-			return fmt.Errorf("remove_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, ErrRoleNotAssigned)
+
+	existingPolicyMap := make(map[string][]string)
+	for _, policyFields := range existingPolicies {
+		if len(policyFields) >= 5 {
+			key := buildPolicyKey(policyFields[1], policyFields[2])
+			existingPolicyMap[key] = policyFields
 		}
 	}
 
-	err = enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, role := range roleCodes {
-			rolePrefixed := addPrefix(role, RoleCode)
-			_, transactionError := transaction.RemoveNamedGroupingPolicy(GTypeUserRole, userPrefixed, rolePrefixed)
-			if transactionError != nil {
-				return fmt.Errorf("remove_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, transactionError)
-			}
+	// Validate all policies exist before removing any
+	for i := range policies {
+		policies[i].Object = strings.TrimSpace(policies[i].Object)
+		policies[i].Action = strings.TrimSpace(policies[i].Action)
+		policy := policies[i]
+
+		if err := policy.Validate(); err != nil {
+			logger.Errorf(ctx, "casbin: policy validation failed during removal: subject=%s, object=%s, action=%s, begin=%s, end=%s, error=%v",
+				subjectWithPrefix, policy.Object, policy.Action,
+				formatTime(policy.BeginTime), formatTime(policy.EndTime), err)
+			return fmt.Errorf("invalid policy (subject=%s, object=%s, action=%s, begin=%s, end=%s): %w",
+				subjectWithPrefix, policy.Object, policy.Action,
+				formatTime(policy.BeginTime), formatTime(policy.EndTime), err)
 		}
+
+		key := buildPolicyKey(policy.Object, policy.Action)
+		if _, exists := existingPolicyMap[key]; !exists {
+			logger.Warnf(ctx, "casbin: policy not found for removal: subject=%s, object=%s, action=%s", subjectWithPrefix, policy.Object, policy.Action)
+			return fmt.Errorf("policy not found (subject=%s, object=%s, action=%s): %w",
+				subjectWithPrefix, policy.Object, policy.Action, ErrPolicyNotFound)
+		}
+	}
+
+	// Remove all policies in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, policy := range policies {
+			_, err := tx.RemovePolicy(
+				subjectWithPrefix,
+				policy.Object,
+				policy.Action,
+				formatTime(policy.BeginTime),
+				formatTime(policy.EndTime),
+			)
+			if err != nil {
+				logger.Errorf(ctx, "casbin: failed to remove policy: subject=%s, object=%s, action=%s, error=%v",
+					subjectWithPrefix, policy.Object, policy.Action, err)
+				return fmt.Errorf("failed to remove policy (subject=%s, object=%s, action=%s): %w",
+					subjectWithPrefix, policy.Object, policy.Action, err)
+			}
+			logger.Debugf(ctx, "casbin: policy removed successfully: subject=%s, object=%s, action=%s",
+				subjectWithPrefix, policy.Object, policy.Action)
+		}
+		logger.Infof(ctx, "casbin: policies removed successfully: subject=%s, count=%d", subjectWithPrefix, len(policies))
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-// GetRolesForUser returns the role codes currently assigned to a user.
-func GetRolesForUser(context *gin.Context, userCode string) ([]string, error) {
+// AssignRolesToUser grants multiple roles to a user atomically.
+// Prevents duplicate role assignments within the same transaction.
+func AssignRolesToUser(ctx *gin.Context, userCode string, roleCodes []string) error {
 	if enforcer == nil {
-		return nil, ErrEnforcerNotInit
+		logger.Errorf(ctx, "casbin: assign roles to user failed: enforcer not initialized")
+		return ErrEnforcerNotInitialized
 	}
 
-	userCode = strings.TrimSpace(userCode)
-	if userCode == "" {
-		return nil, ErrInvalidUserCode
+	if err := validateCode(userCode, EntityUser); err != nil {
+		logger.Errorf(ctx, "casbin: assign roles to user validation failed: user_code=%s, error=%v", userCode, err)
+		return err
 	}
 
-	userPrefixed := addPrefix(userCode, UserCode)
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeUserRole, 0, userPrefixed)
+	if err := validateCodes(roleCodes, EntityRole); err != nil {
+		logger.Errorf(ctx, "casbin: assign roles to user validation failed: role_codes=%v, error=%v", roleCodes, err)
+		return err
+	}
+
+	userWithPrefix := addPrefix(userCode, EntityUser)
+	logger.Infof(ctx, "casbin: assigning roles to user: user=%s, role_count=%d", userWithPrefix, len(roleCodes))
+
+	existingGroupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingUserRole, 0, userWithPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("query_grouping type=%s subject=%s: %w", GTypeUserRole, userPrefixed, err)
+		logger.Errorf(ctx, "casbin: failed to get existing roles for user: user=%s, error=%v", userWithPrefix, err)
+		return fmt.Errorf("failed to get existing roles for user %s: %w", userWithPrefix, err)
 	}
 
-	roleSet := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			roleSet[removePrefix(policyEntry[1], RoleCode)] = struct{}{}
+	existingRoles := make(map[string]struct{})
+	for _, grouping := range existingGroupings {
+		if len(grouping) >= 2 {
+			existingRoles[grouping[1]] = struct{}{}
 		}
+	}
+
+	// Check for duplicates before adding
+	for _, roleCode := range roleCodes {
+		roleWithPrefix := addPrefix(roleCode, EntityRole)
+		if _, exists := existingRoles[roleWithPrefix]; exists {
+			logger.Warnf(ctx, "casbin: role already assigned to user: user=%s, role=%s", userWithPrefix, roleWithPrefix)
+			return fmt.Errorf("role already assigned (user=%s, role=%s): %w",
+				userWithPrefix, roleWithPrefix, ErrRoleAlreadyAssigned)
+		}
+	}
+
+	// Add all role assignments in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, roleCode := range roleCodes {
+			roleWithPrefix := addPrefix(roleCode, EntityRole)
+			_, err := tx.AddNamedGroupingPolicy(GroupingUserRole, userWithPrefix, roleWithPrefix)
+			if err != nil {
+				logger.Errorf(ctx, "casbin: failed to assign role to user: user=%s, role=%s, error=%v", userWithPrefix, roleWithPrefix, err)
+				return fmt.Errorf("failed to assign role (user=%s, role=%s): %w",
+					userWithPrefix, roleWithPrefix, err)
+			}
+			logger.Debugf(ctx, "casbin: role assigned to user: user=%s, role=%s", userWithPrefix, roleWithPrefix)
+		}
+		logger.Infof(ctx, "casbin: roles assigned to user successfully: user=%s, count=%d", userWithPrefix, len(roleCodes))
+		return nil
+	})
+}
+
+// RemoveRolesFromUser revokes multiple roles from a user atomically.
+// Validates role assignments before removal to catch inconsistencies.
+func RemoveRolesFromUser(ctx *gin.Context, userCode string, roleCodes []string) error {
+	if enforcer == nil {
+		logger.Errorf(ctx, "casbin: remove roles from user failed: enforcer not initialized")
+		return ErrEnforcerNotInitialized
+	}
+
+	if err := validateCode(userCode, EntityUser); err != nil {
+		logger.Errorf(ctx, "casbin: remove roles from user validation failed: user_code=%s, error=%v", userCode, err)
+		return err
+	}
+
+	if err := validateCodes(roleCodes, EntityRole); err != nil {
+		logger.Errorf(ctx, "casbin: remove roles from user validation failed: role_codes=%v, error=%v", roleCodes, err)
+		return err
+	}
+
+	userWithPrefix := addPrefix(userCode, EntityUser)
+	logger.Infof(ctx, "casbin: removing roles from user: user=%s, role_count=%d", userWithPrefix, len(roleCodes))
+
+	existingGroupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingUserRole, 0, userWithPrefix)
+	if err != nil {
+		logger.Errorf(ctx, "casbin: failed to get existing roles for removal: user=%s, error=%v", userWithPrefix, err)
+		return fmt.Errorf("failed to get existing roles for user %s: %w", userWithPrefix, err)
+	}
+
+	existingRoles := make(map[string]struct{})
+	for _, grouping := range existingGroupings {
+		if len(grouping) >= 2 {
+			existingRoles[grouping[1]] = struct{}{}
+		}
+	}
+
+	// Verify all roles exist before removing
+	for _, roleCode := range roleCodes {
+		roleWithPrefix := addPrefix(roleCode, EntityRole)
+		if _, exists := existingRoles[roleWithPrefix]; !exists {
+			logger.Warnf(ctx, "casbin: role not assigned to user for removal: user=%s, role=%s", userWithPrefix, roleWithPrefix)
+			return fmt.Errorf("role not assigned (user=%s, role=%s): %w",
+				userWithPrefix, roleWithPrefix, ErrRoleNotAssigned)
+		}
+	}
+
+	// Remove all role assignments in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, roleCode := range roleCodes {
+			roleWithPrefix := addPrefix(roleCode, EntityRole)
+			_, err := tx.RemoveNamedGroupingPolicy(GroupingUserRole, userWithPrefix, roleWithPrefix)
+			if err != nil {
+				logger.Errorf(ctx, "casbin: failed to remove role from user: user=%s, role=%s, error=%v", userWithPrefix, roleWithPrefix, err)
+				return fmt.Errorf("failed to remove role (user=%s, role=%s): %w",
+					userWithPrefix, roleWithPrefix, err)
+			}
+			logger.Debugf(ctx, "casbin: role removed from user: user=%s, role=%s", userWithPrefix, roleWithPrefix)
+		}
+		logger.Infof(ctx, "casbin: roles removed from user successfully: user=%s, count=%d", userWithPrefix, len(roleCodes))
+		return nil
+	})
+}
+
+// GetRolesForUser retrieves all roles for a user, including inherited ones.
+// Returns deduplicated and sorted role codes.
+func GetRolesForUser(ctx *gin.Context, userCode string) ([]string, error) {
+	if enforcer == nil {
+		logger.Errorf(ctx, "casbin: get roles for user failed: enforcer not initialized")
+		return nil, ErrEnforcerNotInitialized
+	}
+
+	if err := validateCode(userCode, EntityUser); err != nil {
+		logger.Errorf(ctx, "casbin: get roles for user validation failed: user_code=%s, error=%v", userCode, err)
+		return nil, err
+	}
+
+	userWithPrefix := addPrefix(userCode, EntityUser)
+	logger.Debugf(ctx, "casbin: getting roles for user: user=%s", userWithPrefix)
+
+	rolesWithPrefix, err := enforcer.GetImplicitRolesForUser(userWithPrefix)
+	if err != nil {
+		logger.Errorf(ctx, "casbin: failed to get roles for user: user=%s, error=%v", userWithPrefix, err)
+		return nil, fmt.Errorf("failed to get roles for user %s: %w", userWithPrefix, err)
+	}
+
+	// Remove duplicates and prefixes
+	roleSet := make(map[string]struct{}, len(rolesWithPrefix))
+	for _, role := range rolesWithPrefix {
+		roleSet[removePrefix(role, EntityRole)] = struct{}{}
 	}
 
 	roles := make([]string, 0, len(roleSet))
-	for r := range roleSet {
-		roles = append(roles, r)
+	for role := range roleSet {
+		roles = append(roles, role)
 	}
 	sort.Strings(roles)
 
+	logger.Debugf(ctx, "casbin: retrieved roles for user: user=%s, role_count=%d, roles=%v", userWithPrefix, len(roles), roles)
 	return roles, nil
 }
 
-// AssignUsersToRole assigns the given users to a role in a single transaction.
-func AssignUsersToRole(context *gin.Context, roleCode string, userCodes []string) error {
+// AssignUsersToRole grants a role to multiple users atomically.
+// Performs reverse duplicate checking (user-to-role vs role-to-user).
+func AssignUsersToRole(ctx *gin.Context, roleCode string, userCodes []string) error {
 	if enforcer == nil {
-		return ErrEnforcerNotInit
+		return ErrEnforcerNotInitialized
 	}
 
-	roleCode = strings.TrimSpace(roleCode)
-	if roleCode == "" {
-		return ErrInvalidRoleCode
-	}
-	if len(userCodes) == 0 {
-		return ErrInvalidUserCode
-	}
-	for i := range userCodes {
-		userCodes[i] = strings.TrimSpace(userCodes[i])
-		if userCodes[i] == "" {
-			return ErrInvalidUserCode
-		}
-	}
-
-	rolePrefixed := addPrefix(roleCode, RoleCode)
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeUserRole, 1, rolePrefixed)
-	if err != nil {
+	if err := validateCode(roleCode, EntityRole); err != nil {
 		return err
 	}
-	existing := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			existing[policyEntry[0]] = struct{}{}
-		}
+
+	if err := validateCodes(userCodes, EntityUser); err != nil {
+		return err
 	}
-	for _, user := range userCodes {
-		userPrefixed := addPrefix(user, UserCode)
-		if _, ok := existing[userPrefixed]; ok {
-			return fmt.Errorf("add_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, ErrUserAlreadyAssigned)
+
+	roleWithPrefix := addPrefix(roleCode, EntityRole)
+	existingGroupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingUserRole, 1, roleWithPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to get existing users for role %s: %w", roleWithPrefix, err)
+	}
+
+	existingUsers := make(map[string]struct{})
+	for _, grouping := range existingGroupings {
+		if len(grouping) >= 2 {
+			existingUsers[grouping[0]] = struct{}{}
 		}
 	}
 
-	err = enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, user := range userCodes {
-			userPrefixed := addPrefix(user, UserCode)
-			_, transactionError := transaction.AddNamedGroupingPolicy(GTypeUserRole, userPrefixed, rolePrefixed)
-			if transactionError != nil {
-				return fmt.Errorf("add_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, transactionError)
+	// Check for duplicates before adding
+	for _, userCode := range userCodes {
+		userWithPrefix := addPrefix(userCode, EntityUser)
+		if _, exists := existingUsers[userWithPrefix]; exists {
+			return fmt.Errorf("user already assigned (role=%s, user=%s): %w",
+				roleWithPrefix, userWithPrefix, ErrUserAlreadyAssigned)
+		}
+	}
+
+	// Add all user assignments in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, userCode := range userCodes {
+			userWithPrefix := addPrefix(userCode, EntityUser)
+			_, err := tx.AddNamedGroupingPolicy(GroupingUserRole, userWithPrefix, roleWithPrefix)
+			if err != nil {
+				return fmt.Errorf("failed to assign user (role=%s, user=%s): %w",
+					roleWithPrefix, userWithPrefix, err)
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-// RemoveUsersFromRole removes the given users from a role in a single transaction.
-func RemoveUsersFromRole(context *gin.Context, roleCode string, userCodes []string) error {
+// RemoveUsersFromRole revokes a role from multiple users atomically.
+// Use for bulk user removal operations.
+func RemoveUsersFromRole(ctx *gin.Context, roleCode string, userCodes []string) error {
 	if enforcer == nil {
-		return ErrEnforcerNotInit
+		return ErrEnforcerNotInitialized
 	}
 
-	roleCode = strings.TrimSpace(roleCode)
-	if roleCode == "" {
-		return ErrInvalidRoleCode
-	}
-	if len(userCodes) == 0 {
-		return ErrInvalidUserCode
-	}
-	for i := range userCodes {
-		userCodes[i] = strings.TrimSpace(userCodes[i])
-		if userCodes[i] == "" {
-			return ErrInvalidUserCode
-		}
-	}
-
-	rolePrefixed := addPrefix(roleCode, RoleCode)
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeUserRole, 1, rolePrefixed)
-	if err != nil {
+	if err := validateCode(roleCode, EntityRole); err != nil {
 		return err
 	}
-	existing := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			existing[policyEntry[0]] = struct{}{}
-		}
+
+	if err := validateCodes(userCodes, EntityUser); err != nil {
+		return err
 	}
-	for _, user := range userCodes {
-		userPrefixed := addPrefix(user, UserCode)
-		if _, ok := existing[userPrefixed]; !ok {
-			return fmt.Errorf("remove_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, ErrUserNotAssigned)
+
+	roleWithPrefix := addPrefix(roleCode, EntityRole)
+	existingGroupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingUserRole, 1, roleWithPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to get existing users for role %s: %w", roleWithPrefix, err)
+	}
+
+	existingUsers := make(map[string]struct{})
+	for _, grouping := range existingGroupings {
+		if len(grouping) >= 2 {
+			existingUsers[grouping[0]] = struct{}{}
 		}
 	}
 
-	err = enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, user := range userCodes {
-			userPrefixed := addPrefix(user, UserCode)
-			_, transactionError := transaction.RemoveNamedGroupingPolicy(GTypeUserRole, userPrefixed, rolePrefixed)
-			if transactionError != nil {
-				return fmt.Errorf("remove_group type=%s subject=%s group=%s: %w", GTypeUserRole, userPrefixed, rolePrefixed, transactionError)
+	// Verify all users exist before removing
+	for _, userCode := range userCodes {
+		userWithPrefix := addPrefix(userCode, EntityUser)
+		if _, exists := existingUsers[userWithPrefix]; !exists {
+			return fmt.Errorf("user not assigned (role=%s, user=%s): %w",
+				roleWithPrefix, userWithPrefix, ErrUserNotAssigned)
+		}
+	}
+
+	// Remove all user assignments in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, userCode := range userCodes {
+			userWithPrefix := addPrefix(userCode, EntityUser)
+			_, err := tx.RemoveNamedGroupingPolicy(GroupingUserRole, userWithPrefix, roleWithPrefix)
+			if err != nil {
+				return fmt.Errorf("failed to remove user (role=%s, user=%s): %w",
+					roleWithPrefix, userWithPrefix, err)
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-// GetUsersForRole returns the user codes currently assigned to a role.
-func GetUsersForRole(context *gin.Context, roleCode string) ([]string, error) {
+// GetUsersForRole retrieves all users for a role, including indirect assignments.
+// Returns deduplicated and sorted user codes.
+func GetUsersForRole(ctx *gin.Context, roleCode string) ([]string, error) {
 	if enforcer == nil {
-		return nil, ErrEnforcerNotInit
+		return nil, ErrEnforcerNotInitialized
 	}
 
-	roleCode = strings.TrimSpace(roleCode)
-	if roleCode == "" {
-		return nil, ErrInvalidRoleCode
+	if err := validateCode(roleCode, EntityRole); err != nil {
+		return nil, err
 	}
 
-	rolePrefixed := addPrefix(roleCode, RoleCode)
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeUserRole, 1, rolePrefixed)
+	roleWithPrefix := addPrefix(roleCode, EntityRole)
+
+	usersWithPrefix, err := enforcer.GetImplicitUsersForRole(roleWithPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("query_grouping type=%s group=%s: %w", GTypeUserRole, rolePrefixed, err)
+		return nil, fmt.Errorf("failed to get users for role %s: %w", roleWithPrefix, err)
 	}
 
-	userSet := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			userSet[removePrefix(policyEntry[0], UserCode)] = struct{}{}
-		}
+	// Remove duplicates and prefixes
+	userSet := make(map[string]struct{}, len(usersWithPrefix))
+	for _, user := range usersWithPrefix {
+		userSet[removePrefix(user, EntityUser)] = struct{}{}
 	}
 
 	users := make([]string, 0, len(userSet))
-	for u := range userSet {
-		users = append(users, u)
+	for user := range userSet {
+		users = append(users, user)
 	}
 	sort.Strings(users)
 
 	return users, nil
 }
 
-// AssignObjectsToGroup assigns the given objects to a group in a single transaction.
-func AssignObjectsToGroup(context *gin.Context, groupCode string, objectCodes []string) error {
+// AssignObjectsToGroup creates resource hierarchies by grouping objects.
+// Enables inheritance-based access control for object collections.
+func AssignObjectsToGroup(ctx *gin.Context, groupCode string, objectCodes []string) error {
 	if enforcer == nil {
-		return ErrEnforcerNotInit
+		return ErrEnforcerNotInitialized
 	}
 
 	groupCode = strings.TrimSpace(groupCode)
 	if groupCode == "" {
 		return ErrInvalidGroupCode
 	}
-	if len(objectCodes) == 0 {
-		return ErrInvalidObjectCode
-	}
-	for i := range objectCodes {
-		objectCodes[i] = strings.TrimSpace(objectCodes[i])
-		if objectCodes[i] == "" {
-			return ErrInvalidObjectCode
-		}
+
+	if err := validateCodes(objectCodes, EntityObject); err != nil {
+		return err
 	}
 
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeObjectGroup, 1, groupCode)
+	existingGroupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingObjectGroup, 1, groupCode)
 	if err != nil {
-		return fmt.Errorf("query_grouping type=%s group=%s: %w", GTypeObjectGroup, groupCode, err)
+		return fmt.Errorf("failed to get existing objects for group %s: %w", groupCode, err)
 	}
-	existing := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			existing[policyEntry[0]] = struct{}{}
-		}
-	}
-	for _, object := range objectCodes {
-		if _, ok := existing[object]; ok {
-			return fmt.Errorf("add_group type=%s subject=%s group=%s: %w", GTypeObjectGroup, object, groupCode, ErrGroupingExists)
+
+	existingObjects := make(map[string]struct{})
+	for _, grouping := range existingGroupings {
+		if len(grouping) >= 2 {
+			existingObjects[grouping[0]] = struct{}{}
 		}
 	}
 
-	err = enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, object := range objectCodes {
-			_, txErr := transaction.AddNamedGroupingPolicy(GTypeObjectGroup, object, groupCode)
-			if txErr != nil {
-				return fmt.Errorf("add_group type=%s subject=%s group=%s: %w", GTypeObjectGroup, object, groupCode, txErr)
+	// Check for duplicates before adding
+	for _, objectCode := range objectCodes {
+		if _, exists := existingObjects[objectCode]; exists {
+			return fmt.Errorf("object already in group (group=%s, object=%s): %w",
+				groupCode, objectCode, ErrGroupingAlreadyExists)
+		}
+	}
+
+	// Add all object assignments in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, objectCode := range objectCodes {
+			_, err := tx.AddNamedGroupingPolicy(GroupingObjectGroup, objectCode, groupCode)
+			if err != nil {
+				return fmt.Errorf("failed to add object to group (group=%s, object=%s): %w",
+					groupCode, objectCode, err)
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-// RemoveObjectsFromGroup removes the given objects from a group in a single transaction.
-func RemoveObjectsFromGroup(context *gin.Context, groupCode string, objectCodes []string) error {
+// RemoveObjectsFromGroup dissolves resource hierarchies by removing objects from groups.
+func RemoveObjectsFromGroup(ctx *gin.Context, groupCode string, objectCodes []string) error {
 	if enforcer == nil {
-		return ErrEnforcerNotInit
+		return ErrEnforcerNotInitialized
 	}
 
 	groupCode = strings.TrimSpace(groupCode)
 	if groupCode == "" {
 		return ErrInvalidGroupCode
 	}
-	if len(objectCodes) == 0 {
-		return ErrInvalidObjectCode
-	}
-	for i := range objectCodes {
-		objectCodes[i] = strings.TrimSpace(objectCodes[i])
-		if objectCodes[i] == "" {
-			return ErrInvalidObjectCode
-		}
+
+	if err := validateCodes(objectCodes, EntityObject); err != nil {
+		return err
 	}
 
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeObjectGroup, 1, groupCode)
+	existingGroupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingObjectGroup, 1, groupCode)
 	if err != nil {
-		return fmt.Errorf("query_grouping type=%s group=%s: %w", GTypeObjectGroup, groupCode, err)
+		return fmt.Errorf("failed to get existing objects for group %s: %w", groupCode, err)
 	}
-	existing := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			existing[policyEntry[0]] = struct{}{}
-		}
-	}
-	for _, object := range objectCodes {
-		if _, ok := existing[object]; !ok {
-			return fmt.Errorf("remove_group type=%s subject=%s group=%s: %w", GTypeObjectGroup, object, groupCode, ErrGroupingNotExist)
+
+	existingObjects := make(map[string]struct{})
+	for _, grouping := range existingGroupings {
+		if len(grouping) >= 2 {
+			existingObjects[grouping[0]] = struct{}{}
 		}
 	}
 
-	err = enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, object := range objectCodes {
-			_, txErr := transaction.RemoveNamedGroupingPolicy(GTypeObjectGroup, object, groupCode)
-			if txErr != nil {
-				return fmt.Errorf("remove_group type=%s subject=%s group=%s: %w", GTypeObjectGroup, object, groupCode, txErr)
+	// Verify all objects exist before removing
+	for _, objectCode := range objectCodes {
+		if _, exists := existingObjects[objectCode]; !exists {
+			return fmt.Errorf("object not in group (group=%s, object=%s): %w",
+				groupCode, objectCode, ErrGroupingNotFound)
+		}
+	}
+
+	// Remove all object assignments in transaction
+	return enforcer.WithTransaction(ctx, func(tx *casbin.Transaction) error {
+		for _, objectCode := range objectCodes {
+			_, err := tx.RemoveNamedGroupingPolicy(GroupingObjectGroup, objectCode, groupCode)
+			if err != nil {
+				return fmt.Errorf("failed to remove object from group (group=%s, object=%s): %w",
+					groupCode, objectCode, err)
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-// GetGroupsForObject returns the group codes an object currently belongs to.
-func GetGroupsForObject(context *gin.Context, objectCode string) ([]string, error) {
+// GetGroupsForObject retrieves all groups containing an object.
+// Useful for debugging resource hierarchy access issues.
+func GetGroupsForObject(ctx *gin.Context, objectCode string) ([]string, error) {
 	if enforcer == nil {
-		return nil, ErrEnforcerNotInit
+		return nil, ErrEnforcerNotInitialized
 	}
 
-	objectCode = strings.TrimSpace(objectCode)
-	if objectCode == "" {
-		return nil, ErrInvalidObjectCode
+	if err := validateCode(objectCode, EntityObject); err != nil {
+		return nil, err
 	}
 
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeObjectGroup, 0, objectCode)
+	groupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingObjectGroup, 0, objectCode)
 	if err != nil {
-		return nil, fmt.Errorf("query_grouping type=%s subject=%s: %w", GTypeObjectGroup, objectCode, err)
+		return nil, fmt.Errorf("failed to get groups for object %s: %w", objectCode, err)
 	}
 
-	groupSet := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			groupSet[policyEntry[1]] = struct{}{}
+	groupSet := make(map[string]struct{}, len(groupings))
+	for _, grouping := range groupings {
+		if len(grouping) >= 2 {
+			groupSet[grouping[1]] = struct{}{}
 		}
 	}
+
 	groups := make([]string, 0, len(groupSet))
-	for g := range groupSet {
-		groups = append(groups, g)
+	for group := range groupSet {
+		groups = append(groups, group)
 	}
 	sort.Strings(groups)
+
 	return groups, nil
 }
 
-// GetObjectsForGroup returns the object codes currently in a group.
-func GetObjectsForGroup(context *gin.Context, groupCode string) ([]string, error) {
+// GetObjectsForGroup retrieves all objects within a specific group.
+// Returns sorted list for consistent ordering.
+func GetObjectsForGroup(ctx *gin.Context, groupCode string) ([]string, error) {
 	if enforcer == nil {
-		return nil, ErrEnforcerNotInit
+		return nil, ErrEnforcerNotInitialized
 	}
 
-	groupCode = strings.TrimSpace(groupCode)
 	if groupCode == "" {
 		return nil, ErrInvalidGroupCode
 	}
 
-	policies, err := enforcer.GetFilteredNamedGroupingPolicy(GTypeObjectGroup, 1, groupCode)
+	groupings, err := enforcer.GetFilteredNamedGroupingPolicy(GroupingObjectGroup, 1, groupCode)
 	if err != nil {
-		return nil, fmt.Errorf("query_grouping type=%s group=%s: %w", GTypeObjectGroup, groupCode, err)
+		return nil, fmt.Errorf("failed to get objects for group %s: %w", groupCode, err)
 	}
 
-	objectSet := make(map[string]struct{})
-	for _, policyEntry := range policies {
-		if len(policyEntry) >= 2 {
-			objectSet[policyEntry[0]] = struct{}{}
+	objectSet := make(map[string]struct{}, len(groupings))
+	for _, grouping := range groupings {
+		if len(grouping) >= 2 {
+			objectSet[grouping[0]] = struct{}{}
 		}
 	}
+
 	objects := make([]string, 0, len(objectSet))
-	for s := range objectSet {
-		objects = append(objects, s)
+	for object := range objectSet {
+		objects = append(objects, object)
 	}
 	sort.Strings(objects)
+
 	return objects, nil
 }
 
-// AssignPoliciesToRole assigns object-action-time policies to a role.
-func AssignPoliciesToRole(context *gin.Context, roleCode string, policies []Policy) error {
-	if enforcer == nil {
-		return ErrEnforcerNotInit
-	}
-
-	roleCode = strings.TrimSpace(roleCode)
-	if roleCode == "" {
-		return ErrInvalidRoleCode
-	}
-
-	rolePrefixed := addPrefix(roleCode, RoleCode)
-	existingPolicies, err := enforcer.GetFilteredPolicy(0, rolePrefixed)
-	if err != nil {
-		return err
-	}
-	existSet := make(map[string]struct{})
-	for _, policyEntry := range existingPolicies {
-		if len(policyEntry) >= 5 {
-			key := policyEntry[1] + "|" + policyEntry[2] + "|" + policyEntry[3] + "|" + policyEntry[4]
-			existSet[key] = struct{}{}
-		}
-	}
-	for i := range policies {
-		policies[i].Object = strings.TrimSpace(policies[i].Object)
-		policies[i].Action = strings.TrimSpace(policies[i].Action)
-		policyItem := policies[i]
-		if err := policyItem.Validate(); err != nil {
-			return fmt.Errorf("assign_policy subject=%s object=%s action=%s begin=%s end=%s: %w", rolePrefixed, policyItem.Object, policyItem.Action, formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime), err)
-		}
-		object, action := policyItem.Object, policyItem.Action
-		beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-		key := object + "|" + action + "|" + beginStr + "|" + endStr
-		if _, ok := existSet[key]; ok {
-			return fmt.Errorf("assign_policy subject=%s object=%s action=%s begin=%s end=%s: %w", rolePrefixed, object, action, beginStr, endStr, ErrPolicyExists)
-		}
-		for _, policyEntry := range existingPolicies {
-			if len(policyEntry) >= 5 && policyEntry[1] == object && policyEntry[2] == action {
-				tb1, err := time.Parse(time.RFC3339, policyEntry[3])
-				if err != nil {
-					return err
-				}
-				te1, err := time.Parse(time.RFC3339, policyEntry[4])
-				if err != nil {
-					return err
-				}
-				overlap := timeOverlap(tb1, te1, policyItem.BeginTime, policyItem.EndTime)
-				if overlap {
-					return fmt.Errorf("assign_policy subject=%s object=%s action=%s begin=%s end=%s: %w", rolePrefixed, object, action, beginStr, endStr, ErrPolicyTimeOverlap)
-				}
-			}
-		}
-	}
-
-	return enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, policyItem := range policies {
-			object, action := policyItem.Object, policyItem.Action
-			beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-			_, err := transaction.AddPolicy(rolePrefixed, object, action, beginStr, endStr)
-			if err != nil {
-				return fmt.Errorf("failed to add policy for role %s: %w", roleCode, err)
-			}
-		}
-		return nil
-	})
+// AssignPoliciesToRole delegates access permissions through role-based policies.
+func AssignPoliciesToRole(ctx *gin.Context, roleCode string, policies []Policy) error {
+	return assignPoliciesToSubject(ctx, roleCode, EntityRole, policies)
 }
 
-// RemovePoliciesFromRole removes object-action-time policies from a role.
-func RemovePoliciesFromRole(context *gin.Context, roleCode string, policies []Policy) error {
-	if enforcer == nil {
-		return ErrEnforcerNotInit
-	}
-
-	roleCode = strings.TrimSpace(roleCode)
-	if roleCode == "" {
-		return ErrInvalidRoleCode
-	}
-
-	rolePrefixed := addPrefix(roleCode, RoleCode)
-	existingPolicies, err := enforcer.GetFilteredPolicy(0, rolePrefixed)
-	if err != nil {
-		return err
-	}
-	existSet := make(map[string]struct{})
-	for _, policyEntry := range existingPolicies {
-		if len(policyEntry) >= 5 {
-			key := policyEntry[1] + "|" + policyEntry[2] + "|" + policyEntry[3] + "|" + policyEntry[4]
-			existSet[key] = struct{}{}
-		}
-	}
-	for i := range policies {
-		policies[i].Object = strings.TrimSpace(policies[i].Object)
-		policies[i].Action = strings.TrimSpace(policies[i].Action)
-		policyItem := policies[i]
-		object, action := policyItem.Object, policyItem.Action
-		beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-		key := object + "|" + action + "|" + beginStr + "|" + endStr
-		if _, ok := existSet[key]; !ok {
-			return fmt.Errorf("remove_policy subject=%s object=%s action=%s begin=%s end=%s: %w", rolePrefixed, object, action, beginStr, endStr, ErrPolicyNotExist)
-		}
-	}
-
-	return enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, policyItem := range policies {
-			object, action := policyItem.Object, policyItem.Action
-			beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-			_, err := transaction.RemovePolicy(rolePrefixed, object, action, beginStr, endStr)
-			if err != nil {
-				return fmt.Errorf("failed to remove policy for role %s: %w", roleCode, err)
-			}
-		}
-		return nil
-	})
+// RemovePoliciesFromRole revokes role-based access permissions.
+func RemovePoliciesFromRole(ctx *gin.Context, roleCode string, policies []Policy) error {
+	return removePoliciesFromSubject(ctx, roleCode, EntityRole, policies)
 }
 
-// GetPoliciesForRole returns policies directly assigned to a role.
-func GetPoliciesForRole(context *gin.Context, roleCode string) ([]Policy, error) {
+// GetPoliciesForRole retrieves active policies for a role.
+// Automatically filters expired policies and returns sorted results.
+func GetPoliciesForRole(ctx *gin.Context, roleCode string) ([]Policy, error) {
 	if enforcer == nil {
-		return nil, ErrEnforcerNotInit
+		return nil, ErrEnforcerNotInitialized
 	}
 
-	if strings.TrimSpace(roleCode) == "" {
-		return nil, ErrInvalidRoleCode
+	if err := validateCode(roleCode, EntityRole); err != nil {
+		return nil, err
 	}
 
-	rolePrefixed := addPrefix(roleCode, RoleCode)
-	policiesRaw, err := enforcer.GetFilteredPolicy(0, rolePrefixed)
+	roleWithPrefix := addPrefix(roleCode, EntityRole)
+	policyFields, err := enforcer.GetFilteredPolicy(0, roleWithPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("query_policies subject=%s: %w", rolePrefixed, err)
+		return nil, fmt.Errorf("failed to get policies for role %s: %w", roleWithPrefix, err)
 	}
-	var policies []Policy
-	for _, entry := range policiesRaw {
-		if len(entry) < 5 {
+
+	policies := make([]Policy, 0, len(policyFields))
+	for _, fields := range policyFields {
+		if len(fields) < 5 {
 			continue
 		}
-		tb, err := time.Parse(time.RFC3339, entry[3])
+
+		beginTime, err := time.Parse(time.RFC3339, fields[3])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse begin time %s: %w", fields[3], err)
 		}
-		te, err := time.Parse(time.RFC3339, entry[4])
+
+		endTime, err := time.Parse(time.RFC3339, fields[4])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse end time %s: %w", fields[4], err)
 		}
-		policies = append(policies, Policy{Object: entry[1], Action: entry[2], BeginTime: tb, EndTime: te})
+
+		policies = append(policies, Policy{
+			Object:    fields[1],
+			Action:    fields[2],
+			BeginTime: beginTime,
+			EndTime:   endTime,
+		})
 	}
+
+	// Filter out expired policies
+	policies = filterExpiredPolicies(policies, time.Now())
+
+	// Sort by object, action, begin time, end time
 	sort.Slice(policies, func(i, j int) bool {
-		pi, pj := policies[i], policies[j]
-		if pi.Object != pj.Object {
-			return pi.Object < pj.Object
+		if policies[i].Object != policies[j].Object {
+			return policies[i].Object < policies[j].Object
 		}
-		if pi.Action != pj.Action {
-			return pi.Action < pj.Action
+		if policies[i].Action != policies[j].Action {
+			return policies[i].Action < policies[j].Action
 		}
-		if !pi.BeginTime.Equal(pj.BeginTime) {
-			return pi.BeginTime.Before(pj.BeginTime)
+		if !policies[i].BeginTime.Equal(policies[j].BeginTime) {
+			return policies[i].BeginTime.Before(policies[j].BeginTime)
 		}
-		return pi.EndTime.Before(pj.EndTime)
+		return policies[i].EndTime.Before(policies[j].EndTime)
 	})
+
 	return policies, nil
 }
 
-// AssignPoliciesToUser assigns object-action-time policies to a user.
-func AssignPoliciesToUser(context *gin.Context, userCode string, policies []Policy) error {
-	if enforcer == nil {
-		return ErrEnforcerNotInit
-	}
-
-	userCode = strings.TrimSpace(userCode)
-	if userCode == "" {
-		return ErrInvalidUserCode
-	}
-
-	userPrefixed := addPrefix(userCode, UserCode)
-	existingPolicies, err := enforcer.GetFilteredPolicy(0, userPrefixed)
-	if err != nil {
-		return fmt.Errorf("query_policies subject=%s: %w", userPrefixed, err)
-	}
-	existSet := make(map[string]struct{})
-	for _, policyEntry := range existingPolicies {
-		if len(policyEntry) >= 5 {
-			key := policyEntry[1] + "|" + policyEntry[2] + "|" + policyEntry[3] + "|" + policyEntry[4]
-			existSet[key] = struct{}{}
-		}
-	}
-	for i := range policies {
-		policies[i].Object = strings.TrimSpace(policies[i].Object)
-		policies[i].Action = strings.TrimSpace(policies[i].Action)
-		policyItem := policies[i]
-		if err := policyItem.Validate(); err != nil {
-			return fmt.Errorf("assign_policy subject=%s object=%s action=%s begin=%s end=%s: %w", userPrefixed, policyItem.Object, policyItem.Action, formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime), err)
-		}
-		object, action := policyItem.Object, policyItem.Action
-		beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-		key := object + "|" + action + "|" + beginStr + "|" + endStr
-		if _, ok := existSet[key]; ok {
-			return fmt.Errorf("assign_policy subject=%s object=%s action=%s begin=%s end=%s: %w", userPrefixed, object, action, beginStr, endStr, ErrPolicyExists)
-		}
-		for _, policyEntry := range existingPolicies {
-			if len(policyEntry) >= 5 && policyEntry[1] == object && policyEntry[2] == action {
-				tb1, err := time.Parse(time.RFC3339, policyEntry[3])
-				if err != nil {
-					return err
-				}
-				te1, err := time.Parse(time.RFC3339, policyEntry[4])
-				if err != nil {
-					return err
-				}
-				overlap := timeOverlap(tb1, te1, policyItem.BeginTime, policyItem.EndTime)
-				if overlap {
-					return fmt.Errorf("assign_policy subject=%s object=%s action=%s begin=%s end=%s: %w", userPrefixed, object, action, formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime), ErrPolicyTimeOverlap)
-				}
-			}
-		}
-	}
-
-	return enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, policyItem := range policies {
-			object, action := policyItem.Object, policyItem.Action
-			beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-			_, err := transaction.AddPolicy(userPrefixed, object, action, beginStr, endStr)
-			if err != nil {
-				return fmt.Errorf("assign_policy subject=%s object=%s action=%s begin=%s end=%s: %w", userPrefixed, object, action, beginStr, endStr, err)
-			}
-		}
-		return nil
-	})
+// AssignPoliciesToUser grants direct user permissions bypassing role hierarchy.
+// Use sparingly - prefer role-based assignments for better maintainability.
+func AssignPoliciesToUser(ctx *gin.Context, userCode string, policies []Policy) error {
+	return assignPoliciesToSubject(ctx, userCode, EntityUser, policies)
 }
 
-// RemovePoliciesFromUser removes object-action-time policies from a user.
-func RemovePoliciesFromUser(context *gin.Context, userCode string, policies []Policy) error {
-	if enforcer == nil {
-		return ErrEnforcerNotInit
-	}
-
-	userCode = strings.TrimSpace(userCode)
-	if userCode == "" {
-		return ErrInvalidUserCode
-	}
-
-	userPrefixed := addPrefix(userCode, UserCode)
-	existingPolicies, err := enforcer.GetFilteredPolicy(0, userPrefixed)
-	if err != nil {
-		return fmt.Errorf("query_policies subject=%s: %w", userPrefixed, err)
-	}
-	existSet := make(map[string]struct{})
-	for _, policyEntry := range existingPolicies {
-		if len(policyEntry) >= 5 {
-			key := policyEntry[1] + "|" + policyEntry[2] + "|" + policyEntry[3] + "|" + policyEntry[4]
-			existSet[key] = struct{}{}
-		}
-	}
-	for i := range policies {
-		policies[i].Object = strings.TrimSpace(policies[i].Object)
-		policies[i].Action = strings.TrimSpace(policies[i].Action)
-		policyItem := policies[i]
-		if err := policyItem.Validate(); err != nil {
-			return fmt.Errorf("remove_policy subject=%s object=%s action=%s begin=%s end=%s: %w", userPrefixed, policyItem.Object, policyItem.Action, formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime), err)
-		}
-		object, action := policyItem.Object, policyItem.Action
-		beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-		key := object + "|" + action + "|" + beginStr + "|" + endStr
-		if _, ok := existSet[key]; !ok {
-			return fmt.Errorf("remove_policy subject=%s object=%s action=%s begin=%s end=%s: %w", userPrefixed, object, action, beginStr, endStr, ErrPolicyNotExist)
-		}
-	}
-
-	return enforcer.WithTransaction(context, func(transaction *casbin.Transaction) error {
-		for _, policyItem := range policies {
-			object, action := policyItem.Object, policyItem.Action
-			beginStr, endStr := formatTime(policyItem.BeginTime), formatTime(policyItem.EndTime)
-			_, err := transaction.RemovePolicy(userPrefixed, object, action, beginStr, endStr)
-			if err != nil {
-				return fmt.Errorf("remove_policy subject=%s object=%s action=%s begin=%s end=%s: %w", userPrefixed, object, action, beginStr, endStr, err)
-			}
-		}
-		return nil
-	})
+// RemovePoliciesFromUser revokes direct user permissions.
+// Does not affect inherited permissions from roles.
+func RemovePoliciesFromUser(ctx *gin.Context, userCode string, policies []Policy) error {
+	return removePoliciesFromSubject(ctx, userCode, EntityUser, policies)
 }
 
-// GetPoliciesForUser returns effective policies for a user (direct + inherited from roles).
-func GetPoliciesForUser(context *gin.Context, userCode string) ([]Policy, error) {
+// GetPoliciesForUser retrieves all effective policies for a user.
+// Combines direct and role-inherited permissions, filtering expired policies.
+func GetPoliciesForUser(ctx *gin.Context, userCode string) ([]Policy, error) {
 	if enforcer == nil {
-		return nil, ErrEnforcerNotInit
+		logger.Errorf(ctx, "casbin: get policies for user failed: enforcer not initialized")
+		return nil, ErrEnforcerNotInitialized
 	}
 
-	if strings.TrimSpace(userCode) == "" {
-		return nil, ErrInvalidUserCode
+	if err := validateCode(userCode, EntityUser); err != nil {
+		logger.Errorf(ctx, "casbin: get policies for user validation failed: user_code=%s, error=%v", userCode, err)
+		return nil, err
 	}
 
-	userPrefixed := addPrefix(userCode, UserCode)
-	userPoliciesRaw, err := enforcer.GetFilteredPolicy(0, userPrefixed)
+	userWithPrefix := addPrefix(userCode, EntityUser)
+	logger.Debugf(ctx, "casbin: getting policies for user: user=%s", userWithPrefix)
+
+	policyFields, err := enforcer.GetImplicitPermissionsForUser(userWithPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("query_policies subject=%s: %w", userPrefixed, err)
+		logger.Errorf(ctx, "casbin: failed to get policies for user: user=%s, error=%v", userWithPrefix, err)
+		return nil, fmt.Errorf("failed to get policies for user %s: %w", userWithPrefix, err)
 	}
-	var userPolicies []Policy
-	for _, entry := range userPoliciesRaw {
-		if len(entry) < 5 {
+
+	policies := make([]Policy, 0, len(policyFields))
+	for _, fields := range policyFields {
+		if len(fields) < 5 {
 			continue
 		}
-		tb, err := time.Parse(time.RFC3339, entry[3])
+
+		beginTime, err := time.Parse(time.RFC3339, fields[3])
 		if err != nil {
-			return nil, err
+			logger.Errorf(ctx, "casbin: failed to parse begin time: time=%s, error=%v", fields[3], err)
+			return nil, fmt.Errorf("failed to parse begin time %s: %w", fields[3], err)
 		}
-		te, err := time.Parse(time.RFC3339, entry[4])
+
+		endTime, err := time.Parse(time.RFC3339, fields[4])
 		if err != nil {
-			return nil, err
+			logger.Errorf(ctx, "casbin: failed to parse end time: time=%s, error=%v", fields[4], err)
+			return nil, fmt.Errorf("failed to parse end time %s: %w", fields[4], err)
 		}
-		userPolicies = append(userPolicies, Policy{Object: entry[1], Action: entry[2], BeginTime: tb, EndTime: te})
+
+		policies = append(policies, Policy{
+			Object:    fields[1],
+			Action:    fields[2],
+			BeginTime: beginTime,
+			EndTime:   endTime,
+		})
 	}
 
-	roles, err := GetRolesForUser(context, userCode)
-	if err != nil {
-		return nil, fmt.Errorf("query_grouping type=%s subject=%s: %w", GTypeUserRole, userPrefixed, err)
-	}
-	var rolePolicies []Policy
-	for _, role := range roles {
-		rolePolicyList, err := GetPoliciesForRole(context, role)
-		if err != nil {
-			return nil, fmt.Errorf("query_policies subject=%s: %w", addPrefix(role, RoleCode), err)
+	// Filter out expired policies
+	policies = filterExpiredPolicies(policies, time.Now())
+
+	// Sort by object, action, begin time, end time
+	sort.Slice(policies, func(i, j int) bool {
+		if policies[i].Object != policies[j].Object {
+			return policies[i].Object < policies[j].Object
 		}
-		rolePolicies = append(rolePolicies, rolePolicyList...)
-	}
-	combined := append(userPolicies, rolePolicies...)
-	sort.Slice(combined, func(i, j int) bool {
-		pi, pj := combined[i], combined[j]
-		if pi.Object != pj.Object {
-			return pi.Object < pj.Object
+		if policies[i].Action != policies[j].Action {
+			return policies[i].Action < policies[j].Action
 		}
-		if pi.Action != pj.Action {
-			return pi.Action < pj.Action
+		if !policies[i].BeginTime.Equal(policies[j].BeginTime) {
+			return policies[i].BeginTime.Before(policies[j].BeginTime)
 		}
-		if !pi.BeginTime.Equal(pj.BeginTime) {
-			return pi.BeginTime.Before(pj.BeginTime)
-		}
-		return pi.EndTime.Before(pj.EndTime)
+		return policies[i].EndTime.Before(policies[j].EndTime)
 	})
-	return combined, nil
+
+	logger.Debugf(ctx, "casbin: retrieved policies for user: user=%s, policy_count=%d", userWithPrefix, len(policies))
+	return policies, nil
 }
 
-// Policy describes an object-action rule within a time window.
+// filterExpiredPolicies removes expired access policies based on current time.
+// Includes policies ending exactly at current time.
+func filterExpiredPolicies(policies []Policy, currentTime time.Time) []Policy {
+	activePolicies := make([]Policy, 0, len(policies))
+	for _, policy := range policies {
+		if currentTime.Before(policy.EndTime) || currentTime.Equal(policy.EndTime) {
+			activePolicies = append(activePolicies, policy)
+		}
+	}
+	return activePolicies
+}
+
+// Policy defines time-bound access control rules.
+// Supports temporal permissions with automatic expiration.
 type Policy struct {
-	Object    string
-	Action    string
-	BeginTime time.Time
-	EndTime   time.Time
+	Object    string    // Resource identifier
+	Action    string    // Permission type (read, write, etc.)
+	BeginTime time.Time // Policy start time (UTC)
+	EndTime   time.Time // Policy end time (UTC)
 }
 
-// Validate checks the policy fields and time window for correctness.
+// Validate checks policy integrity and time constraints.
+// Returns error for missing required fields or invalid time ranges.
 func (p Policy) Validate() error {
 	if p.Object == "" || p.Action == "" {
 		return ErrInvalidPolicyFields

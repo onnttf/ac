@@ -13,7 +13,7 @@ import (
 	"ac/bootstrap"
 	"ac/controller"
 
-	apiMenu "ac/controller/menu"
+	apiObject "ac/controller/object"
 	apiPermission "ac/controller/permission"
 	apiRole "ac/controller/role"
 	apiUser "ac/controller/user"
@@ -38,7 +38,6 @@ import (
 // @License.Name    MIT
 // @License.Url     https://opensource.org/licenses/MIT
 // @Host            localhost:8082
-// @BasePath        /api
 // @Schemes         http https
 // @Accept          json
 // @Produce         json
@@ -71,7 +70,7 @@ func main() {
 	api := router.Group("/api")
 	apiUser.RegisterRoutes(api)
 	apiRole.RegisterRoutes(api)
-	apiMenu.RegisterRoutes(api)
+	apiObject.RegisterRoutes(api)
 	apiPermission.RegisterRoutes(api)
 
 	srv := &http.Server{

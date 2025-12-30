@@ -21,12 +21,12 @@ func NewError(code int, msg, hint string) *Error {
 	}
 }
 
-// Withmsg returns a copy with a new message.
-func (e *Error) Withmsg(newmsg string) *Error {
+// WithMsg returns a copy with a new message.
+func (e *Error) WithMsg(newmsg string) *Error {
 	if e == nil {
 		return nil
 	}
-	return e.WithmsgAndHint(newmsg, e.Hint)
+	return e.WithMsgAndHint(newmsg, e.Hint)
 }
 
 // WithHint returns a copy with a new hint.
@@ -34,11 +34,11 @@ func (e *Error) WithHint(newHint string) *Error {
 	if e == nil {
 		return nil
 	}
-	return e.WithmsgAndHint(e.Msg, newHint)
+	return e.WithMsgAndHint(e.Msg, newHint)
 }
 
-// WithmsgAndHint returns a copy with both message and hint updated.
-func (e *Error) WithmsgAndHint(newmsg, newHint string) *Error {
+// WithMsgAndHint returns a copy with both message and hint updated.
+func (e *Error) WithMsgAndHint(newmsg, newHint string) *Error {
 	if e == nil {
 		return nil
 	}

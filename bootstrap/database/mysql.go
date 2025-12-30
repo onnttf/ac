@@ -10,6 +10,7 @@ import (
 	"ac/bootstrap/logger"
 
 	"gorm.io/driver/mysql"
+	//"gorm.io/gen"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
@@ -46,7 +47,7 @@ func InitMySQL() error {
 		sqlDB, err := db.DB()
 		if err != nil {
 			initErr = fmt.Errorf("failed to get sql.DB from gorm.DB: %w", err)
-			fmt.Fprintf(os.Stderr, "ERROR: database: get-sqldb: failed, reason=get db, error=%v\n", err)
+			fmt.Fprintf(os.Stderr, "ERROR: database: get db: failed, reason=get db, error=%v\n", err)
 			return
 		}
 
@@ -74,6 +75,24 @@ func InitMySQL() error {
 			config.Config().Database.Database,
 		)
 	})
+
+	//g := gen.NewGenerator(gen.Config{
+	//	ModelPkgPath:      "./model",
+	//	FieldWithIndexTag: true,
+	//	FieldWithTypeTag:  true,
+	//})
+	//dataMap := map[string]func(gorm.ColumnType) (dataType string){
+	//	"int": func(columnType gorm.ColumnType) (dataType string) {
+	//		return "int64"
+	//	},
+	//	"tinyint": func(columnType gorm.ColumnType) (dataType string) {
+	//		return "int64"
+	//	},
+	//}
+	//g.WithDataTypeMap(dataMap)
+	//g.UseDB(DB)
+	//g.GenerateAllTable()
+	//g.Execute()
 
 	return initErr
 }
